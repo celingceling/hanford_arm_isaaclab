@@ -4,7 +4,7 @@ URDF Validation Test Suite for Hanford Arm
 Tests: joint limits, axes, collision, EE frame, deterministic control
 
 Usage:
-    %ISAACLAB_EXE% -p source/hanford_arm_isaaclab/tests/test_urdf_validation.py --usd_path assets/hanford_arm.usd --headless
+    %ISAACLAB_EXE% -p source/hanford_arm_isaaclab/tests/test_urdf_validation.py --headless
 """
 
 # ============================================================================
@@ -25,7 +25,8 @@ from isaaclab.app import AppLauncher
 # Define asset paths
 # ============================================================================
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-USD_PATH = str(PROJECT_ROOT / "assets" / "hanford_arm_moveit_isaaclab.usd")
+USD_PATH = str(PROJECT_ROOT / "assets" / "hanford_arm_moveit_isaaclab_another.usd")
+
 
 # Prim paths
 robot_prim_path = "/World/pit_robot_assembly"
@@ -54,8 +55,18 @@ from isaaclab.sim.simulation_context import set_camera_view
 from isaaclab.assets import Articulation, ArticulationCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.utils.seed import configure_seed
 # from isaaclab.utils.math import quat_from_euler_xyz, matrix_from_quat
 
+# from pxr import Usd
+# stage = Usd.Stage.Open(r"C:\Users\LICF\projects\hanford_arm_isaaclab\assets\hanford_arm_moveit_isaaclab_another.usd")
+# print("Default prim:", stage.GetDefaultPrim())
+# print("Up axis:", stage.GetMetadata("upAxis"))
+
+# # Check Isaac Sim schema version metadata
+# root = stage.GetPseudoRoot()
+# for prim in stage.Traverse():
+#     print(prim.GetPath(), prim.GetTypeName(), prim.GetSpecifier())
 
 # ============================================================================
 # CONFIGURATION CLASS
@@ -195,7 +206,7 @@ class URDFValidator:
         # )
         
         robot_cfg = ArticulationCfg(
-            prim_path="/World/Robot",
+            prim_path="/World/Robot/pit_robot_robotonly/pipe_entry",
             spawn=sim_utils.UsdFileCfg(
                 usd_path=USD_PATH,
                 activate_contact_sensors=True,
@@ -208,12 +219,22 @@ class URDFValidator:
                 ),
             },
         )
-
         self.robot = Articulation(robot_cfg)
+        
+        stage = simulation_app.context.get_stage()
+        print("\n=== RIGID BODIES ===")
+        for p in stage.Traverse():
+            if "Robot" in str(p.GetPath()):
+                schemas = p.GetAppliedSchemas()
+                if any("RigidBody" in s for s in schemas):
+                    print(f"  RigidBody: {p.GetPath()} [{p.GetTypeName()}]")
+                elif any("ArticulationRoot" in s for s in schemas):
+                    print(f"  ArticulationRoot: {p.GetPath()} [{p.GetTypeName()}]")
+        print("=== END ===")
 
         # Setup contact sensor for collision detection
         contact_cfg = ContactSensorCfg(
-            prim_path="/World/Robot/pit_robot_assembly/.*", # put sensors on all links
+            prim_path="/World/Robot/pit_robot_robotonly/pipe_entry/.*", # put sensors on all links
             update_period=0.0,
             history_length=1,
             filter_prim_paths_expr=["/World/Ground"],
@@ -302,8 +323,8 @@ class URDFValidator:
         self.robot.set_joint_position_target(zero_pos)
         for _ in range(50):
             self.sim.step()
-
-        initial_ee_pos = self.robot.data.body_pos_w[0, -1].clone()  # Assuming last body is EE
+        ee_idx = self.robot.body_names.index("end_effector")
+        initial_ee_pos = self.robot.data.body_pos_w[0, ee_idx].clone()  # Assuming last body is EE
 
         for i, name in enumerate(self.joint_names):
             # Apply small positive delta
@@ -316,7 +337,7 @@ class URDFValidator:
                 self.sim.step()
 
             # Measure EE displacement
-            final_ee_pos = self.robot.data.body_pos_w[0, -1]
+            final_ee_pos = self.robot.data.body_pos_w[0, ee_idx]
             displacement = (final_ee_pos - initial_ee_pos).cpu().numpy()
 
             # Reset
@@ -346,9 +367,10 @@ class URDFValidator:
         for _ in range(50):
             self.sim.step()
 
-        # Get EE pose (assuming last body is EE)
-        ee_pos = self.robot.data.body_pos_w[0, -1].cpu().numpy()
-        ee_quat = self.robot.data.body_quat_w[0, -1].cpu().numpy()
+        # Get EE pose
+        ee_idx = self.robot.body_names.index("end_effector")
+        ee_pos = self.robot.data.body_pos_w[0, ee_idx].cpu().numpy()
+        ee_quat = self.robot.data.body_quat_w[0, ee_idx].cpu().numpy()
 
         results = {
             'ee_position': ee_pos,
@@ -372,7 +394,7 @@ class URDFValidator:
         target_pos = torch.zeros(1, self.num_joints, device=self.device)
         for i in range(self.num_joints):
             mid = (self.joint_limits[0, i] + self.joint_limits[1, i]) / 2.0
-            target_pos[0, i] = mid
+            target_pos[0, i] = mid * 0.3 + self.joint_limits[0, i]
 
         print(f"  Target positions: {target_pos[0].cpu().numpy()}")
         print(f"  Running for {self.cfg.test_duration}s...")
@@ -421,7 +443,7 @@ class URDFValidator:
 
         for _ in range(100):
             self.sim.step()
-            self.contact_sensor.update(self.sim.dt)
+            self.contact_sensor.update(self.sim_cfg.dt)
 
             forces = self.contact_sensor.data.net_forces_w
             if forces is not None and len(forces) > 0:
@@ -448,7 +470,7 @@ class URDFValidator:
 
         def run_sequence(seed: int):
             """Run fixed command sequence"""
-            self.sim.set_seed(seed)
+            configure_seed(42)
             self.sim.reset()
 
             states = []
