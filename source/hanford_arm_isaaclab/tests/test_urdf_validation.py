@@ -4,6 +4,7 @@ URDF Validation Test Suite for Hanford Arm
 Tests: joint limits, axes, collision, EE frame, deterministic control
 
 Usage:
+    From hanford_arm_isaaclab/
     %ISAACLAB_EXE% -p source/hanford_arm_isaaclab/tests/test_urdf_validation.py --headless
 """
 
@@ -24,8 +25,8 @@ from isaaclab.app import AppLauncher
 # ============================================================================
 # Define asset paths
 # ============================================================================
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-USD_PATH = str(PROJECT_ROOT / "assets" / "hanford_arm_moveit_isaaclab_another.usd")
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+USD_PATH = str(PROJECT_ROOT / "hanford_wire_manipulator_with_camera_description" / "usd" / "robot_pit_end_effector" / "robot_pit_end_effector_2.usd")
 
 
 # Prim paths
@@ -92,8 +93,8 @@ class URDFValidationConfig:
     contact_force_threshold: float = 5.0 # N
 
     # Joint control (tune for robot)
-    stiffness: float = 400.0
-    damping: float = 40.0
+    stiffness: float = 10000.0
+    damping: float = 100.0
 
     # Collision filtering
     collision_group: int = 0  # Example: filter self-collisions
@@ -206,7 +207,7 @@ class URDFValidator:
         # )
         
         robot_cfg = ArticulationCfg(
-            prim_path="/World/Robot/pit_robot_robotonly/pipe_entry",
+            prim_path="/World/Robot/pit_robot_assembly/pipe_entry",
             spawn=sim_utils.UsdFileCfg(
                 usd_path=USD_PATH,
                 activate_contact_sensors=True,
@@ -234,7 +235,7 @@ class URDFValidator:
 
         # Setup contact sensor for collision detection
         contact_cfg = ContactSensorCfg(
-            prim_path="/World/Robot/pit_robot_robotonly/pipe_entry/.*", # put sensors on all links
+            prim_path="/World/Robot/pit_robot_assembly/pipe_entry/.*", # put sensors on all links
             update_period=0.0,
             history_length=1,
             filter_prim_paths_expr=["/World/Ground"],
