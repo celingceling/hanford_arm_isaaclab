@@ -36,6 +36,7 @@ def reset_from_3_spots(
     
     # pick random pose to reset to via index
     idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
+    poses_w = poses_w.to(device=asset.device) # move poses to gpu
     pose = poses_w[idx].clone()
     pose[:, 0:3] += env.scene.env_origins[env_ids] # keep per-env origin behavior (aka taking relative pos to global)
     # note: does this mean each env has the same random config, or is each env unique and random

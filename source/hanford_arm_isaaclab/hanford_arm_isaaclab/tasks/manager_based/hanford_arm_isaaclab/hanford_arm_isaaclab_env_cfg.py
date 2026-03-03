@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-""" Usage:  %ISAACLAB%ISAACLAB_EXE% -p scripts\rsl_rl\train.py --task=Template-Hanford-Arm-Isaaclab-v0 --headless --num_envs=1"""
+""" Usage:  %ISAACLAB%ISAACLAB_EXE% -p scripts/rsl_rl/train.py --task=Template-Hanford-Arm-Isaaclab-v0 --headless --num_envs=1"""
 
 import math
 from pathlib import Path
@@ -29,8 +29,8 @@ from . import mdp
 ##
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-ARM_USD_PATH = str(PROJECT_ROOT / "hanford_wire_manipulator_with_camera_description" / "usd" / "robot_pit_end_effector" / "robot_pit_end_effector_2.usd")
-TANK_USD_PATH = str(PROJECT_ROOT / "hanford_wire_manipulator_with_camera_description" / "usd" / "tank.usd")
+ARM_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/robot_pit_end_effector/robot_pit_end_effector_2.usd"
+TANK_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/tank.usd"
 
 JOINT_NAMES=[ # list of joint names that the action will be mapped to
                 "insert_into_pipe", "rotate_in_pipe", 
@@ -38,6 +38,14 @@ JOINT_NAMES=[ # list of joint names that the action will be mapped to
                 "end_effector_joint",
             ]
 
+    
+# reset arm position randomly
+# making these private (adding _) because otherwise it thinks it's an event term 
+POSES_W = torch.zeros((3, 7), dtype=torch.float32)  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
+POSES_W[0, 0:2] = [-0.55, 0.0, 1.1]
+POSES_W[1, 0:2] = [1.012, 0.414, 1.1]
+POSES_W[2, 0:2] = [1.678, -0.976, 1.1]
+POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
 
 ##
 # Configuration
@@ -60,10 +68,25 @@ ARM_CFG = ArticulationCfg(
     actuators={ # joint names and properties taken from the usd in USD_PATH,ignore root joint bc don't intend to command
         "arm": ImplicitActuatorCfg(
             joint_names_expr=JOINT_NAMES,
-        ), # don't set effort, stiffness, and damping, use usd defined
+            stiffness={
+                "insert_into_pipe": 20000.0,
+                "rotate_in_pipe":  15000.0,
+                "joint_1":         500.0,
+                "joint_2":         10000.0,
+                "joint_3_pulley_spin": 6.52348,
+                "end_effector_joint":  144.0,
+            },
+            damping={
+                "insert_into_pipe": 400.0,
+                "rotate_in_pipe":  0.3,
+                "joint_1":          100.0,
+                "joint_2":          0.5,
+                "joint_3_pulley_spin": 0.00261,
+                "end_effector_joint":  0.05755,
+            },
+        ),
     },
 )
-
 
 
 ##
@@ -86,12 +109,14 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
         prim_path="/World/DomeLight",
         spawn=sim_utils.DomeLightCfg(
             color=(0.9,0.9,0.9), 
-            intensity=100.0
+            intensity=1500.0
             ),
     )
 
     # robot
-    robot: ArticulationCfg = ARM_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot") # squiggly but same as example usagef
+    robot: ArticulationCfg = ARM_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+        ) # squiggly but same as example usagef
     
     # tank
     tank_cfg: AssetBaseCfg = AssetBaseCfg(
@@ -154,16 +179,12 @@ class ObservationsCfg:
 class EventCfg:
     """Configuration for events."""
     
-    # reset arm position randomly
-    poses_w = torch.zeros((3, 7), dtype=torch.float32)  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
-    poses_w[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
-    
     # reset joint configuration in random config
-    reset_joint_config = EventTerm(
+    reset_root = EventTerm(
         func=mdp.reset_from_3_spots,
         mode="reset",
         params={
-            "poses_w": poses_w,
+            "poses_w": POSES_W,
         },
     )
 
@@ -205,7 +226,7 @@ class TerminationsCfg:
 @configclass
 class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
-    scene: HanfordArmIsaaclabSceneCfg = HanfordArmIsaaclabSceneCfg(num_envs=4096, env_spacing=4.0)
+    scene: HanfordArmIsaaclabSceneCfg = HanfordArmIsaaclabSceneCfg(num_envs=4096, env_spacing=8.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
