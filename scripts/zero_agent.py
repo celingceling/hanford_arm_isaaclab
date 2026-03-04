@@ -47,6 +47,11 @@ def main():
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
+    # DEBUG: check actual joint names
+    robot = env.unwrapped.scene["robot"]
+    print("Actuated joints:", robot.joint_names)
+    print("Count:", robot.num_joints)
+    
     # print info (this is vectorized environment)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")

@@ -8,11 +8,12 @@
 import math
 from pathlib import Path
 import torch
-from pink.tasks import FrameTask
+from pink.tasks import FrameTask 
 
 import carb
 
 import isaaclab.sim as sim_utils
+import isaaclab.envs.mdp as base_mdp
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
@@ -33,16 +34,23 @@ from . import mdp
 # Global Variables
 ##
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = "C:/Users/LICF/projects"
 ARM_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/robot_pit_end_effector/robot_pit_end_effector_2.usd"
+ARM_URDF_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/urdf/robot_pit_end_effector_edited.urdf"
 TANK_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/tank.usd"
 
 JOINT_NAMES=[ # list of joint names that the action will be mapped to
                 "insert_into_pipe", "rotate_in_pipe", 
-                "joint_1", "joint_2", "joint_3_pulley_spin",
-                "end_effector_joint",
+                "joint_1", "joint_2", "end_effector_joint",
+                "joint_3_pulley_spin",
             ]
 
+ALL_JOINT_NAMES = JOINT_NAMES + [ 
+                   "yaw_mount_to_base", "camera_link_to_zed_x_mini",
+                   "zed_base_to_left", "zed_base_to_right", "zed_left_to_optical", 
+                   "zed_base_to_imu", "zed_right_to_optical", 
+                   "camera_link_to_pulley"
+                   ]
     
 # reset arm position randomly
 # making these private (adding _) because otherwise it thinks it's an event term 
@@ -165,11 +173,17 @@ class ActionsCfg:
     #     joint_names=JOINT_NAMES, 
     #     scale=100.0)
     
-    pink_ik_cfg = PinkInverseKinematicsActionCfg(
+    pink_ik_cfg_action = PinkInverseKinematicsActionCfg(
         pink_controlled_joint_names=JOINT_NAMES,
+        asset_name="robot",
+        hand_joint_names=[],
         controller=PinkIKControllerCfg(
             articulation_name="robot",
             base_link_name="pipe_entry",
+            urdf_path=ARM_URDF_PATH,
+            mesh_path=PROJECT_ROOT,
+            joint_names=JOINT_NAMES,
+            all_joint_names=JOINT_NAMES,
             show_ik_warnings=False, # note: ?
             variable_input_tasks=[
                 FrameTask( # change these values
@@ -179,15 +193,15 @@ class ActionsCfg:
                     lm_damping=10,  # dampening for solver for step jumps
                     gain=0.5,
                 ),
-                NullSpacePostureTask( # change these values also what is this and frame task
-                    cost=0.5,
-                    lm_damping=1,
-                    controlled_frames=[
-                        "end_effector",
-                    ],
-                    controlled_joints=JOINT_NAMES,
-                    gain=0.3,
-                ),
+                # NullSpacePostureTask( # change these values also what is this and frame task # commenting out for now bc not full body ctrl yet, just ee
+                #     cost=0.5,
+                #     lm_damping=1,
+                #     controlled_frames=[
+                #         "end_effector",
+                #     ],
+                #     controlled_joints=JOINT_NAMES,
+                #     gain=0.3,
+                # ),
             ],
             fixed_input_tasks=[], # consider fixing insert into pipe...
             xr_enabled=bool(carb.settings.get_settings().get("/app/xr/enabled")), # idk
@@ -208,13 +222,20 @@ class ObservationsCfg:
         """
         Observations for policy group.
         
-        joint_pos_vel(7x3=21), joint_vel_rel(7*3=21) = 42 obs terms
         """
 
-        # observation terms (order preserved)
-        joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel) # extract EE position and vel from these
-        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
-
+        actions = ObsTerm(func=mdp.last_action)
+        robot_joint_pos = ObsTerm( # current joint pos for IK
+            func=base_mdp.joint_pos,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
+        robot_root_pos = ObsTerm(func=base_mdp.root_pos_w, params={"asset_cfg": SceneEntityCfg("robot")}) # root pos and rot
+        robot_root_rot = ObsTerm(func=base_mdp.root_quat_w, params={"asset_cfg": SceneEntityCfg("robot")})
+        # robot_links_state = ObsTerm(func=mdp.get_all_robot_link_state) # from humanoid, overkill for small arm
+    
+        ee_pos = ObsTerm(func=mdp.get_eef_pos, params={"link_name": "end_effector"})
+        ee_quat = ObsTerm(func=mdp.get_eef_quat, params={"link_name": "end_effector"})
+        
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
@@ -275,7 +296,7 @@ class TerminationsCfg:
 class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: HanfordArmIsaaclabSceneCfg = HanfordArmIsaaclabSceneCfg(
-        num_envs=4096, 
+        num_envs=16, 
         env_spacing=6.0
         )
     # Basic settings
