@@ -176,7 +176,7 @@ class CommandsCfg:
         ranges=base_mdp.UniformPoseCommandCfg.Ranges( 
             pos_x = (-1.8825, 2.4927), # tank ROI with 0.2 margin
             pos_y = (-1.4868, 1.1358),
-            pos_z = ( 0.2806, 1.9824),
+            pos_z = (0.30, 1.30), # Z is offset by -0.7 since tank is offset by +0.7
             roll=(0.0, 0.0), # also figure out axis stuff
             pitch=(0.0, 0.0),  # lock pitch and roll for now
             yaw=(-3.14, 3.14),
