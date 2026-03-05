@@ -194,7 +194,7 @@ class CommandsCfg:
             pos_z=(0.381, 1.882),    # tank z in world (0.7 base + extent)
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
-            yaw=(-3.14, 3.14),
+            yaw=(0.0, 0.0),
         ),
     )
     
@@ -417,7 +417,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 2.0
+        self.episode_length_s = 6.0
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
