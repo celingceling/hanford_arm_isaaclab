@@ -123,11 +123,11 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
             in_tank = self._is_in_tank(pos_w, pending_ids)
             reachable = self._is_reachable(pos_w, pending_ids)
             step_ok = self._is_in_step(pos_w, pending_ids)  # your EE step gate
-            if attempt == 0:
-                print("attempt0 in_tank:", in_tank.float().mean().item(),
-                    "reachable:", reachable.float().mean().item(),
-                    "ee step ok:", step_ok.float().mean().item(),
-                    )
+            # if attempt == 0:
+            #     print("attempt0 in_tank:", in_tank.float().mean().item(),
+            #         "reachable:", reachable.float().mean().item(),
+            #         "ee step ok:", step_ok.float().mean().item(),
+            #         )
             valid = in_tank & reachable & step_ok
 
             # accept valid samples
