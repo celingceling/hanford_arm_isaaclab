@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-""" Usage:  %ISAACLAB%ISAACLAB_EXE% -p scripts/rsl_rl/train.py --task=Template-Hanford-Arm-Isaaclab-v0 --headless --num_envs=1"""
-"""
+""" 
+Usage: python scripts\tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=256
 
 NOTE: this is modeled after reach_env_cfg.py from isaaclab_tasks
 

@@ -7,9 +7,13 @@ from isaaclab.utils import configclass
 
 
 # ── tuneable constants ────────────────────────────────────────────────────────
-MAX_RESAMPLE_TRIES  = 20    # give up after this many attempts per env
+MAX_RESAMPLE_TRIES  = 200    # give up after this many attempts per env
 ARM_REACH_MIN       = 0.2  # [m] dead-zone around root (too close = unreachable)
 ARM_REACH_MAX       = 0.7  # [m] max reach from root - tune to your arm geometry
+
+# EE-centered step size limits (per resample)
+EE_STEP_MIN = 0.05   # [m] deadzone: avoid tiny moves (increase to reduce jitter)
+EE_STEP_MAX = 0.50   # [m] max jump per new target (decrease to reduce IK thrash)
 
 # Tank AABB in world frame (same values as CommandsCfg.ranges but used for
 # the collision / in-tank check).  Keep in sync with your ranges.
@@ -59,6 +63,13 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
         # root_pos = self.robot.data.root_pos_w[env_ids]          # [n, 3]
         dist = torch.norm(pos_w - anchor_pos, dim=-1)             # [n]
         return (dist >= ARM_REACH_MIN) & (dist <= ARM_REACH_MAX)
+    
+    def _is_in_step(self, pos_w: torch.Tensor, env_ids: torch.Tensor) -> torch.Tensor:
+        """EE-centered step gate: target must be within [EE_STEP_MIN, EE_STEP_MAX] of current EE pose."""
+        # Current EE pose in world for these envs. self.body_idx is the EE body index from UniformPoseCommand.
+        ee_pos_w = self.robot.data.body_pos_w[env_ids, self.body_idx, :]  # [n,3]
+        dist = torch.norm(pos_w - ee_pos_w, dim=-1)                       # [n]
+        return (dist >= EE_STEP_MIN) & (dist <= EE_STEP_MAX)
 
     def _is_in_tank(self, pos_w: torch.Tensor, env_ids: torch.Tensor) -> torch.Tensor:
         """Return bool mask [n] — True if pos_w is inside the tank AABB."""
@@ -79,6 +90,13 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
         accepted_pos_w  = self.pose_command_w[env_ids_t, :3].clone()
         accepted_quat_w = self.pose_command_w[env_ids_t, 3:].clone()
         pending = torch.ones(n, dtype=torch.bool, device=self.device)  # still need a sample
+        
+        # make default/stale cmd env local
+        if hasattr(self, "_ee_init_valid"):
+            home_mask = self._ee_init_valid[env_ids_t]
+            if home_mask.any():
+                accepted_pos_w[home_mask] = self._ee_init_pos_w[env_ids_t[home_mask]]
+                accepted_quat_w[home_mask] = self._ee_init_quat_w[env_ids_t[home_mask]]
 
         for attempt in range(MAX_RESAMPLE_TRIES):
             if not pending.any():
@@ -102,12 +120,15 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
             pos_w = pos_w + self._env.scene.env_origins[pending_ids]  # make it env-local → world
 
             # ── validity checks ───────────────────────────────────────────
-            in_tank = self._is_in_tank(pos_w, pending_ids)  
-            reachable  = self._is_reachable(pos_w, pending_ids)
+            in_tank = self._is_in_tank(pos_w, pending_ids)
+            reachable = self._is_reachable(pos_w, pending_ids)
+            step_ok = self._is_in_step(pos_w, pending_ids)  # your EE step gate
             if attempt == 0:
                 print("attempt0 in_tank:", in_tank.float().mean().item(),
-                    "reachable:", reachable.float().mean().item())
-            valid      = in_tank & reachable
+                    "reachable:", reachable.float().mean().item(),
+                    "ee step ok:", step_ok.float().mean().item(),
+                    )
+            valid = in_tank & reachable & step_ok
 
             # accept valid samples
             if valid.any():
@@ -158,6 +179,48 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
         )
         self.metrics["position_error"]    = torch.norm(pos_error, dim=-1)
         self.metrics["orientation_error"] = torch.norm(rot_error, dim=-1)
+        
+    def reset(self, env_ids: Sequence[int] | None = None):
+        # --- allocate once ---
+        if not hasattr(self, "_ee_init_pos_w"):
+            num_envs = self.robot.data.root_pos_w.shape[0]
+            self._ee_init_pos_w = torch.zeros((num_envs, 3), device=self.device)
+            self._ee_init_quat_w = torch.zeros((num_envs, 4), device=self.device)
+            self._ee_init_valid = torch.zeros((num_envs,), dtype=torch.bool, device=self.device)
+
+        # --- normalize env_ids to a tensor on device ---
+        if env_ids is None:
+            env_ids_t = torch.arange(self._ee_init_pos_w.shape[0], device=self.device)
+        else:
+            env_ids_t = torch.as_tensor(env_ids, device=self.device)
+
+        # --- record "home" BEFORE super().reset triggers resampling ---
+        self._ee_init_pos_w[env_ids_t] = self.robot.data.body_pos_w[env_ids_t, self.body_idx, :]
+        self._ee_init_quat_w[env_ids_t] = self.robot.data.body_quat_w[env_ids_t, self.body_idx, :]
+        self._ee_init_valid[env_ids_t] = True
+        
+        # Let base class do its reset/resample plumbing
+        metrics = super().reset(env_ids=env_ids)
+
+        # Allocate buffers once (num_envs known after robot is initialized)
+        if not hasattr(self, "_ee_init_pos_w"):
+            num_envs = self.robot.data.root_pos_w.shape[0]
+            self._ee_init_pos_w = torch.zeros((num_envs, 3), device=self.device)
+            self._ee_init_quat_w = torch.zeros((num_envs, 4), device=self.device)
+            self._ee_init_valid = torch.zeros((num_envs,), dtype=torch.bool, device=self.device)
+
+        # Decide which envs to record
+        if env_ids is None:
+            env_ids_t = torch.arange(self._ee_init_pos_w.shape[0], device=self.device)
+        else:
+            env_ids_t = torch.as_tensor(env_ids, device=self.device)
+
+        # Record current EE pose as the "home" target for those envs
+        self._ee_init_pos_w[env_ids_t] = self.robot.data.body_pos_w[env_ids_t, self.body_idx, :]
+        self._ee_init_quat_w[env_ids_t] = self.robot.data.body_quat_w[env_ids_t, self.body_idx, :]
+        self._ee_init_valid[env_ids_t] = True
+
+        return metrics
 
 
 @configclass
