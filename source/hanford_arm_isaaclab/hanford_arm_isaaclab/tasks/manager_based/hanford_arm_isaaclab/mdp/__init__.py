@@ -12,3 +12,5 @@ from .rewards import *  # noqa: F401, F403
 from .terminations import *
 
 from .observations import *
+
+from .commands import *

@@ -168,20 +168,37 @@ class CommandsCfg:
         Randomly samples EE target poses
     """
 
-    ee_pose = base_mdp.UniformPoseCommandCfg(
+    # ee_pose = base_mdp.UniformPoseCommandCfg( # samples from ROBOT FRAME not world frame
+    #     asset_name="robot",
+    #     body_name="end_effector", # end effector
+    #     resampling_time_range=(4.0, 4.0), # send new command ever 4 seconds
+    #     debug_vis=True,
+    #     ranges=base_mdp.UniformPoseCommandCfg.Ranges(  # world_AABB = Translate + unitsResolve ⊙ extent
+    #         pos_x = (-1.8825, 2.4927), # tank ROI with 0.2 margin
+    #         pos_y = (-1.4868, 1.1358),
+    #         pos_z = (-1.0, 1.0),
+    #         roll=(0.0, 0.0), # also figure out axis stuff
+    #         pitch=(0.0, 0.0),  # lock pitch and roll for now
+    #         yaw=(-3.14, 3.14),
+    #     ),
+    # )
+    
+    ee_pose = mdp.WorldFrameUniformPoseCommandCfg(
         asset_name="robot",
-        body_name="end_effector", # end effector
-        resampling_time_range=(4.0, 4.0), # send new command ever 4 seconds
+        body_name="end_effector",
+        resampling_time_range=(4.0, 4.0),
         debug_vis=True,
-        ranges=base_mdp.UniformPoseCommandCfg.Ranges( 
-            pos_x = (-1.8825, 2.4927), # tank ROI with 0.2 margin
-            pos_y = (-1.4868, 1.1358),
-            pos_z = (0.30, 1.30), # Z is offset by -0.7 since tank is offset by +0.7
-            roll=(0.0, 0.0), # also figure out axis stuff
-            pitch=(0.0, 0.0),  # lock pitch and roll for now
+        ranges=mdp.WorldFrameUniformPoseCommandCfg.Ranges(
+            pos_x=(-1.782, 2.393),   # world frame tank bounds with 0.3 margin
+            pos_y=(-1.387, 1.036),
+            pos_z=(0.381, 1.882),    # tank z in world (0.7 base + extent)
+            roll=(0.0, 0.0),
+            pitch=(0.0, 0.0),
             yaw=(-3.14, 3.14),
         ),
     )
+    
+    
 
 
 @configclass
