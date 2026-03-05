@@ -8,13 +8,13 @@ from isaaclab.utils import configclass
 
 # ── tuneable constants ────────────────────────────────────────────────────────
 MAX_RESAMPLE_TRIES  = 20    # give up after this many attempts per env
-ARM_REACH_MIN       = 0.1  # [m] dead-zone around root (too close = unreachable)
-ARM_REACH_MAX       = 1.50  # [m] max reach from root - tune to your arm geometry
+ARM_REACH_MIN       = 0.2  # [m] dead-zone around root (too close = unreachable)
+ARM_REACH_MAX       = 0.7  # [m] max reach from root - tune to your arm geometry
 
 # Tank AABB in world frame (same values as CommandsCfg.ranges but used for
 # the collision / in-tank check).  Keep in sync with your ranges.
-TANK_LOCAL_MIN = torch.tensor([-1.782, -1.387, 0.381])
-TANK_LOCAL_MAX = torch.tensor([ 2.393,  1.036, 1.882])
+TANK_LOCAL_MIN = torch.tensor([-1.682, -1.287, 0.381]) # margin = 0.3
+TANK_LOCAL_MAX = torch.tensor([ 2.293,  0.936, 1.882])
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -50,7 +50,7 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
         else:
             names = list(self.robot.data.body_names)
 
-        return names.index("link_2")
+        return names.index("end_effector")
 
     def _is_reachable(self, pos_w: torch.Tensor, env_ids: torch.Tensor) -> torch.Tensor:
         """Return bool mask [n] — True if pos_w is within the arm's reach from LINK_2."""
