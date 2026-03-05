@@ -56,8 +56,8 @@ def main():
     print("Count:", robot.num_joints)
     
     # print info (this is vectorized environment)
-    print(f"[INFO]: Gym observation space: {env.observation_space}")
-    print(f"[INFO]: Gym action space: {env.action_space}")
+    # print(f"[INFO]: Gym observation space: {env.observation_space}")
+    # print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment
     env.reset()
     
@@ -65,11 +65,11 @@ def main():
     robot = env.unwrapped.scene["robot"]
     # Robot root pose in world
     root_pos_w = robot.data.root_pos_w  # shape [num_envs, 3]
-    print("robot root z:", root_pos_w[:, 2].cpu().numpy())
+    # print("robot root z:", root_pos_w[:, 2].cpu().numpy())
 
     # Tank prim pose if you want (GUI is easier), but command z is immediate:
     cmd = env.unwrapped.command_manager.get_command("ee_pose")
-    print("sampled target z:", cmd[:, 2].cpu().numpy())
+    # print("sampled target z:", cmd[:, 2].cpu().numpy())
     
     # simulate environment
     while simulation_app.is_running():

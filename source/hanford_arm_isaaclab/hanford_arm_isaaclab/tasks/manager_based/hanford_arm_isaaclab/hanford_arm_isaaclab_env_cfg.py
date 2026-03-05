@@ -134,7 +134,7 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
         prim_path="/World/DomeLight",
         spawn=sim_utils.DomeLightCfg(
             color=(0.9,0.9,0.9), 
-            intensity=2000.0
+            intensity=100.0
             ),
     )
 
