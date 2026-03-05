@@ -171,12 +171,12 @@ class CommandsCfg:
     ee_pose = base_mdp.UniformPoseCommandCfg(
         asset_name="robot",
         body_name="end_effector", # end effector
-        resampling_time_range=(4.0, 4.0),
+        resampling_time_range=(4.0, 4.0), # send new command ever 4 seconds
         debug_vis=True,
-        ranges=base_mdp.UniformPoseCommandCfg.Ranges( # EDIT RANGES LATER
-            pos_x=(0.35, 0.65), # ranges, figure out later
-            pos_y=(-0.2, 0.2),
-            pos_z=(-0.5, -0.15),
+        ranges=base_mdp.UniformPoseCommandCfg.Ranges( 
+            pos_x = (-1.8825, 2.4927), # tank ROI with 0.2 margin
+            pos_y = (-1.4868, 1.1358),
+            pos_z = ( 0.2806, 1.9824),
             roll=(0.0, 0.0), # also figure out axis stuff
             pitch=(0.0, 0.0),  # lock pitch and roll for now
             yaw=(-3.14, 3.14),
@@ -188,7 +188,9 @@ class CommandsCfg:
 class ActionsCfg:
     """
     Action specifications for the MDP.
-    Use differential IK to solve joint positions
+    Use differential IK to solve joint positions.
+    
+    The action is the pose command.
     
     """
     
@@ -270,13 +272,12 @@ class EventCfg:
     
     # ok maybe this function is better than the custom one made above
     
-    # reset joints by offset of their default state 
-    # use for now, switch to within custom limits later
-    reset_robot_joints = EventTerm(
+    # reset joints to zero state
+    reset_robot_joints = EventTerm( # probably a more direct function than this one exists
         func=base_mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "position_range": (-0.3, 0.7),  # adds ±0.3 rad offset to default (0.0)
+            "position_range": (0.0, 0.0),
             "velocity_range": (0.0, 0.0),
         },
     )
