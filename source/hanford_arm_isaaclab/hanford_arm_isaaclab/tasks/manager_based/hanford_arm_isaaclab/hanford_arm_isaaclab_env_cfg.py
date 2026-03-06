@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """ 
-Usage: python scripts\tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=256
+Usage: python scripts\tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=256 --enable_cameras --rendering_mode quality
 
 NOTE: this is modeled after reach_env_cfg.py from isaaclab_tasks
 
@@ -36,9 +36,9 @@ from . import mdp
 ##
 
 # PROJECT_ROOT = "C:/Users/LICF/projects"
-ARM_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/robot_pit_end_effector/robot_pit_end_effector_2.usd"
+ARM_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/robot_pit_end_effector/robot_pit_end_effector_2.usd" # hard coded
 # ARM_URDF_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/urdf/robot_pit_end_effector_edited.urdf"
-TANK_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/tank.usd"
+TANK_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/tank.usd" # hard coded
 
 JOINT_NAMES=[ # list of joint names that the action will be mapped to
                 "insert_into_pipe", "rotate_in_pipe", 
@@ -187,7 +187,7 @@ class CommandsCfg:
         asset_name="robot",
         body_name="end_effector",
         resampling_time_range=(0.75, 0.75),
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.WorldFrameUniformPoseCommandCfg.Ranges(
             pos_x=(-1.782, 2.393),   # world frame tank bounds with 0.3 margin
             pos_y=(-1.387, 1.036),
