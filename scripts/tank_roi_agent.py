@@ -63,6 +63,8 @@ def main():
     
     # Debug print statements
     robot = env.unwrapped.scene["robot"]
+    ptz = env.unwrapped.scene["ptz"]
+    
     # Robot root pose in world
     root_pos_w = robot.data.root_pos_w  # shape [num_envs, 3]
     # print("robot root z:", root_pos_w[:, 2].cpu().numpy())

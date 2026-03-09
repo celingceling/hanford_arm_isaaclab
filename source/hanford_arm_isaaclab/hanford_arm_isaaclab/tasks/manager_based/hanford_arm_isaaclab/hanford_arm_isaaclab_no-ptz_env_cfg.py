@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """ 
-Usage: python scripts/tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=16
+Usage: python scripts\tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=256 --enable_cameras --rendering_mode quality
 
 NOTE: this is modeled after reach_env_cfg.py from isaaclab_tasks
 
@@ -37,16 +37,14 @@ from . import mdp
 
 # PROJECT_ROOT = "C:/Users/LICF/projects"
 ARM_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/robot_pit_end_effector/robot_pit_end_effector_2.usd" # hard coded
+# ARM_URDF_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/urdf/robot_pit_end_effector_edited.urdf"
 TANK_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/tank.usd" # hard coded
-PTZ_USD_PATH = "C:/Users/LICF/projects/scope89_ptz/usd/scope89_ptz/scope89_ptz.usd"
 
 JOINT_NAMES=[ # list of joint names that the action will be mapped to
                 "insert_into_pipe", "rotate_in_pipe", 
                 "joint_1", "joint_2", "end_effector_joint",
                 "joint_3_pulley_spin",
             ]
-
-PTZ_JOINT_NAMES=["J1", "J2"]
 
 # ALL_JOINT_NAMES = JOINT_NAMES + [ 
 #                    "yaw_mount_to_base", "camera_link_to_zed_x_mini",
@@ -115,43 +113,11 @@ ARM_CFG = ArticulationCfg(
     },
 )
 
-"""Configuration for the Scope89 Pan-Tilt-Zoom (PTZ) camera"""
-PTZ_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=PTZ_USD_PATH,
-        activate_contact_sensors=False, # add contact sensors and set to true later
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=True,
-        ),
-    ),
-    init_state=ArticulationCfg.InitialStateCfg(
-        joint_pos={
-            "J1": 0.0, # Pan
-            "J2": 0.0, # Tilt
-            },
-    ),
-    actuators={
-        "ptz": ImplicitActuatorCfg(
-            joint_names_expr=PTZ_JOINT_NAMES,
-            stiffness={
-                "J1": 1000.0, # Pan
-                "J2": 1000.0, # Tilt
-                },
-            damping={
-                "J1": 100.0, # Pan
-                "J2": 100.0, # Tilt
-                },
-            effort_limit={
-                "J1": 100.0, # Pan
-                "J2": 100.0, # Tilt
-                },
-        ),
-    },
-)
 
 ##
 # Scene definition
 ##
+
 
 @configclass
 class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
@@ -160,9 +126,7 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
     # ground plane
     ground = AssetBaseCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(
-            size=(100.0, 100.0)
-            ),
+        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
     )
     
     # lights
@@ -179,11 +143,6 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot",
         ) # squiggly but same as example usagef
     
-    # ptz
-    ptz: ArticulationCfg = PTZ_CFG.replace(
-        prim_path="{ENV_REGEX_NS}/PTZ",
-    )
-    
     # tank
     tank_cfg: AssetBaseCfg = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/Tank",
@@ -195,6 +154,7 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
             pos=(0.0,0.0,0.7),
         ),
     )
+
 
 
 ##
@@ -237,6 +197,7 @@ class CommandsCfg:
             yaw=(0.0, 0.0),
         ),
     )
+    
     
 
 
@@ -313,38 +274,26 @@ class EventCfg:
     """
     
     # reset joint configuration in random config
-    reset_roots = EventTerm(
-        func=mdp.reset_multi_from_3_spots,
+    reset_root = EventTerm(
+        func=mdp.reset_from_3_spots,
         mode="reset",
         params={
             "poses_w": POSES_W,
         },
     )
-    
-    # reset_arm_root = EventTerm(
-    #     func=mdp.reset_from_3_spots,
-    #     mode="reset",
-    #     params={
-    #         "poses_w": POSES_W,
-    #         "asset_name": "robot",
-    #     },
-    # )
-    
-    # reset_ptz_root = EventTerm(
-    #     func=mdp.reset_from_3_spots,
-    #     mode="reset",
-    #     params={
-    #         "poses_w": POSES_W,
-    #         "asset_name": "ptz",
-    #     },
-    # )
 
+    # reset_joint_config = EventTerm(
+    #     func=mdp.reset_joints_uniform_within_limits,
+    #     mode="reset",
+    # )
+    
+    # ok maybe this function is better than the custom one made above
+    
     # reset joints to zero state
     reset_robot_joints = EventTerm( # probably a more direct function than this one exists
         func=base_mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot"),
             "position_range": (0.0, 0.0),
             "velocity_range": (0.0, 0.0),
         },
@@ -468,7 +417,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 60.0
+        self.episode_length_s = 6.0
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
