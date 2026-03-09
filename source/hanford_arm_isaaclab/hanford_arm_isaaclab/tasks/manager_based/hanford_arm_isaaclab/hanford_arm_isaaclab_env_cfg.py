@@ -58,10 +58,10 @@ PTZ_JOINT_NAMES=["J1", "J2"]
 # reset arm position randomly
 # making these private (adding _) because otherwise it thinks it's an event term 
 POSES_W = torch.zeros((3, 7), dtype=torch.float32)  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
-POSES_W[0, 0:3] = torch.tensor([-0.55, 0.0, 2.0], dtype=torch.float32)
+POSES_W[0, 0:3] = torch.tensor([-0.554, 0.01, 2.0], dtype=torch.float32)
 POSES_W[1, 0:3] = torch.tensor([1.012, 0.414, 2.0], dtype=torch.float32)
 POSES_W[2, 0:3] = torch.tensor([1.678, -0.976, 2.0], dtype=torch.float32)
-POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
+# POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
 
 ##
 # Configuration
@@ -129,6 +129,7 @@ PTZ_CFG = ArticulationCfg(
             "J1": 0.0, # Pan
             "J2": 0.0, # Tilt
             },
+        rot=(0.0, 0.0, 1.0, 0.0)
     ),
     actuators={
         "ptz": ImplicitActuatorCfg(
@@ -321,6 +322,15 @@ class EventCfg:
         },
     )
     
+    reset_ptz_joints = EventTerm(
+        func=base_mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("ptz"),
+            "position_range": (0.0, 0.0),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
     # reset_arm_root = EventTerm(
     #     func=mdp.reset_from_3_spots,
     #     mode="reset",
@@ -468,7 +478,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 60.0
+        self.episode_length_s = 6.0
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings

@@ -68,6 +68,11 @@ def main():
     # Robot root pose in world
     root_pos_w = robot.data.root_pos_w  # shape [num_envs, 3]
     # print("robot root z:", root_pos_w[:, 2].cpu().numpy())
+    print("PTZ default_root_state[0, :7] =", ptz.data.default_root_state[0, :7].detach().cpu().numpy())
+    print("PTZ current root_state_w[0, :7] =", ptz.data.root_state_w[0, :7].detach().cpu().numpy())
+
+    print("Robot default_root_state[0, :7] =", robot.data.default_root_state[0, :7].detach().cpu().numpy())
+    print("Robot current root_state_w[0, :7] =", robot.data.root_state_w[0, :7].detach().cpu().numpy())
 
     # Tank prim pose if you want (GUI is easier), but command z is immediate:
     cmd = env.unwrapped.command_manager.get_command("ee_pose")

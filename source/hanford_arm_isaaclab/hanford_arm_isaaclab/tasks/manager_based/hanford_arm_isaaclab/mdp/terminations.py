@@ -63,6 +63,7 @@ def reset_multi_from_3_spots(
     poses_w = poses_w.to(device=device, dtype=torch.float32)
     n = env_ids.numel()
     origins = env.scene.env_origins[env_ids]  # [n,3]
+    ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
     
     # define assets
     robot = env.scene[asset_names[0]]
@@ -83,10 +84,10 @@ def reset_multi_from_3_spots(
     pose_ptz = default_root_ptz[:, :7].clone() 
     
     # keep per-env origin behavior (aka taking relative pos to global)
-    pose_robot[:, 0:3] = origins + poses_w[idx_ptx, 0:3]
-    pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] 
+    pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3]
+    pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] + ptz_offset
     
-    vel = torch.zeros((len(env_ids),6), device=device) # don't move
+    vel = torch.zeros(n,6, device=device) # don't move
     
     robot.write_root_pose_to_sim(pose_robot,env_ids=env_ids)
     robot.write_root_velocity_to_sim(vel,env_ids=env_ids)
