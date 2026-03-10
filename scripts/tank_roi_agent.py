@@ -35,6 +35,7 @@ import torch
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
+import isaacsim.core.prims as prims
 
 import hanford_arm_isaaclab.tasks  # noqa: F401
 
@@ -105,13 +106,16 @@ def main():
                 f"Command shape {arm_command.shape} doesn't match action space {env.action_space.shape}"
             
             # get ptz command
-            ptz_pos_w = ptz.data.root_pos_w
-            
-
+            ptz_body_idx = ptz.find_bodies("base_link")[0]
+            ptz_pos_w = ptz.data.body_pos_w[:, ptz_body_idx, :]
+        
             
             # get ee pos in world frame
             ee_body_idx = robot.find_bodies("end_effector")[0]
             ee_pos_w = robot.data.body_pos_w[:, ee_body_idx, :]
+            
+            # ptz_cam_link = prims.XFormPrim("/World/envs/env_0/PTZ/Tilt_Link/Camera_Link")
+            # print("Camera Link Pose: ", ptz_cam_link.get_world_poses())
             
             # print("ptz joint pos:", ptz.data.joint_pos)
             # print("ptz joint vel:", ptz.data.joint_vel)
