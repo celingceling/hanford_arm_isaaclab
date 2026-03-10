@@ -8,6 +8,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import math
 
 from isaaclab.app import AppLauncher
 
@@ -37,6 +38,44 @@ from isaaclab_tasks.utils import parse_env_cfg
 
 import hanford_arm_isaaclab.tasks  # noqa: F401
 
+def compute_ptz_action(ptz_pos_w: torch.Tensor, ee_pos_w: torch.Tensor) -> torch.Tensor:
+    """Compute PTZ pan/tilt joints to point towards arm end effector
+    
+        PTZ initially spawns pointing in -Y direction
+        
+        Returns Joint targets in radians, Shape [num_envs, 2]
+    """
+    
+    # make things right shapes, squeeze out second dimension if wrong
+    if ptz_pos_w.ndim == 3:   # e.g., [N, 1, 3]
+        ptz_pos_w = ptz_pos_w[:, 0, :]  # -> [N, 3]
+
+    if ee_pos_w.ndim == 3:
+        ee_pos_w = ee_pos_w[:, 0, :]
+        
+    # print("ee pos: ", ee_pos_w)
+    # print("ptz root pose: ", ptz_pos_w)
+    # Vector ptz -> ee
+    delta = ee_pos_w - ptz_pos_w
+    # print("ptz delta: ", delta)
+    
+    # get pan, pan is XY plane so atan (dy/dx), minus 90deg because ptz initially facing -Y direction
+    pan = -torch.atan2(delta[:, 1], delta[:, 0]) - (math.pi) # [num_envs]
+    # pan = wrap_to_pi(pan)
+    
+    # get horizontal distance (XY distance)
+    horiz_dist = torch.norm(delta[:, :2], dim=1)  # [num_envs]
+    
+    tilt_lim = 140 * math.pi / 180.0
+    # get tilt (tilt is aligned in the plane that is horiz_dist and Z)
+    tilt = -torch.atan2(delta[:, 2], horiz_dist) # [num_envs]
+    tilt = torch.clamp(tilt, -tilt_lim, tilt_lim) # clamp to limits
+    
+    # stack pan and tilt into action tensor [num_envs, 2], matches order of ptz joint names
+    return torch.stack([pan, tilt], dim=1)
+
+def wrap_to_pi(x: torch.Tensor) -> torch.Tensor:
+    return (x + math.pi) % (2 * math.pi) - math.pi
 
 def main():
     """Agent that sends pose commands from random sample inside tank.
@@ -50,45 +89,46 @@ def main():
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
-    # DEBUG: check actual joint names
-    robot = env.unwrapped.scene["robot"]
-    print("Actuated joints:", robot.joint_names)
-    print("Count:", robot.num_joints)
-    
-    # print info (this is vectorized environment)
-    # print(f"[INFO]: Gym observation space: {env.observation_space}")
-    # print(f"[INFO]: Gym action space: {env.action_space}")
-    # reset environment
-    env.reset()
-    
-    # Debug print statements
+    # get handles of articulations
     robot = env.unwrapped.scene["robot"]
     ptz = env.unwrapped.scene["ptz"]
     
-    # Robot root pose in world
-    root_pos_w = robot.data.root_pos_w  # shape [num_envs, 3]
-    # print("robot root z:", root_pos_w[:, 2].cpu().numpy())
-    print("PTZ default_root_state[0, :7] =", ptz.data.default_root_state[0, :7].detach().cpu().numpy())
-    print("PTZ current root_state_w[0, :7] =", ptz.data.root_state_w[0, :7].detach().cpu().numpy())
-
-    print("Robot default_root_state[0, :7] =", robot.data.default_root_state[0, :7].detach().cpu().numpy())
-    print("Robot current root_state_w[0, :7] =", robot.data.root_state_w[0, :7].detach().cpu().numpy())
-
-    # Tank prim pose if you want (GUI is easier), but command z is immediate:
-    cmd = env.unwrapped.command_manager.get_command("ee_pose")
-    # print("sampled target z:", cmd[:, 2].cpu().numpy())
+    env.reset()
     
     # simulate environment
     while simulation_app.is_running():
         with torch.inference_mode():
-            # get command
-            command = env.unwrapped.command_manager.get_command("ee_pose")
-            # shape check - fast failure instead of cryptic error
-            # command shape: [num_envs, 7] -> [x, y, z, qw, qx, qy, qz]
-            assert command.shape == (env.unwrapped.num_envs, env.action_space.shape[-1]), \
-                f"Command shape {command.shape} doesn't match action space {env.action_space.shape}"
-            # send command
-            env.step(command)
+            
+            # get arm command [num_envs, 7]  →  [x, y, z, qw, qx, qy, qz]
+            arm_command = env.unwrapped.command_manager.get_command("ee_pose")
+            assert arm_command.shape == (env.unwrapped.num_envs, env.action_space.shape[-1]), \
+                f"Command shape {arm_command.shape} doesn't match action space {env.action_space.shape}"
+            
+            # get ptz command
+            ptz_pos_w = ptz.data.root_pos_w
+            
+
+            
+            # get ee pos in world frame
+            ee_body_idx = robot.find_bodies("end_effector")[0]
+            ee_pos_w = robot.data.body_pos_w[:, ee_body_idx, :]
+            
+            # print("ptz joint pos:", ptz.data.joint_pos)
+            # print("ptz joint vel:", ptz.data.joint_vel)
+            # print("ptz pos target:", ptz.data.joint_pos_target)
+            # convert to joint targets (rad)
+            ptz_action = compute_ptz_action(
+                ptz_pos_w=ptz_pos_w, 
+                ee_pos_w=ee_pos_w
+                )
+            
+            # print("PTZ action: ", ptz_action)
+            
+            # write directly to articulation buffer (no MDP terms)
+            ptz.set_joint_position_target(ptz_action)
+            
+            # step (applies arm command + physics + ptz action)
+            env.step(arm_command)
 
     # close the simulator
     env.close()

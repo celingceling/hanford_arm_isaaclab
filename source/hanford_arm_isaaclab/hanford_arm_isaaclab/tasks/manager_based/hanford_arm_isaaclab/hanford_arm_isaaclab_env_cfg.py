@@ -29,6 +29,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
+import isaacsim.core.prims as prims
+
 from . import mdp
 
 ##
@@ -47,6 +49,8 @@ JOINT_NAMES=[ # list of joint names that the action will be mapped to
             ]
 
 PTZ_JOINT_NAMES=["J1", "J2"]
+
+EE_LIGHT_PRIM = "/World/envs/env_0/Robot/pulley_drive/SphereLight"
 
 # ALL_JOINT_NAMES = JOINT_NAMES + [ 
 #                    "yaw_mount_to_base", "camera_link_to_zed_x_mini",
@@ -484,3 +488,6 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
+        
+        # prim = sim_utils.get_prim_at_path(EE_LIGHT_PRIM)
+        # sim_utils.safe_set_attribute_on_usd_prim(prim, "inputs:intensity", 0.0, camel_case=False)
