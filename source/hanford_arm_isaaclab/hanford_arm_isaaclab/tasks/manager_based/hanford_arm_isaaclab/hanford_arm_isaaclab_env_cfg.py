@@ -107,7 +107,7 @@ ARM_CFG = ArticulationCfg(
                 "joint_3_pulley_spin": 5,
                 "end_effector_joint":  5,
             },
-            effort_limit={
+            effort_limit_sim={
                 "insert_into_pipe": 100,
                 "rotate_in_pipe":  100,
                 "joint_1":          100,

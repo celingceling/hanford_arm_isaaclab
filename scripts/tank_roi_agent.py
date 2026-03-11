@@ -53,21 +53,22 @@ def compute_ptz_action(ptz_pos_w, ee_pos_w, **kwargs):
     delta = ee_pos_w - ptz_pos_w
 
     # PTZ faces -Y in world frame, so pan=0 when EE is in -Y direction
-    pan = torch.atan2(-delta[:, 0], -delta[:, 1])
+    pan = torch.atan2(-delta[:, 0], -delta[:, 1]) * 1.75
 
     horiz_dist = torch.norm(delta[:, :2], dim=1)
     tilt = -torch.atan2(delta[:, 2], horiz_dist)
-    tilt = torch.clamp(tilt, -140 * math.pi / 180.0, 140 * math.pi / 180.0)
+    tilt = torch.clamp(tilt, -50 * math.pi / 180.0, 230 * math.pi / 180.0)
     
-    # DEBUG: EE 0.5 m in front of PTZ (PTZ forward = -Y in world)
-    delta_zero = torch.zeros_like(delta)
-    delta_zero[:, 2] = +.5  # -Y forward
+    # # DEBUG: EE 0.5 m in front of PTZ (PTZ forward = -Y in world)
+    # delta_zero = torch.zeros_like(delta)
+    # delta_zero[:, 0] = 0.7  # -Y forward
+    # delta_zero[:, 1] = -0.7  # -Y forward
     
-    pan = torch.atan2(-delta_zero[:, 0], -delta_zero[:, 1])
+    # pan = torch.atan2(-delta_zero[:, 0], -delta_zero[:, 1]) * 2.0
 
-    horiz_dist = torch.norm(delta_zero[:, :2], dim=1)
-    tilt = -torch.atan2(delta_zero[:, 2], horiz_dist)
-    tilt = torch.clamp(tilt, -140 * math.pi / 180.0, 140 * math.pi / 180.0)
+    # horiz_dist = torch.norm(delta_zero[:, :2], dim=1)
+    # tilt = -torch.atan2(delta_zero[:, 2], horiz_dist)
+    # tilt = torch.clamp(tilt, -50 * math.pi / 180.0, 230 * math.pi / 180.0)
 
     return torch.stack([pan, tilt], dim=1)
 
@@ -93,7 +94,7 @@ def main():
     ptz = env.unwrapped.scene["ptz"]
     
     env.reset()
-    print("PTZ joints at rest (zero command):", ptz.data.joint_pos[0])
+
     # simulate environment
     ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
 
@@ -103,6 +104,9 @@ def main():
     ee_body_ids, _ = robot.find_bodies("end_effector")
     ee_body_idx = int(ee_body_ids[0])
 
+    print("PTZ joint names:", ptz.data.joint_names)
+    print("PTZ body names:", [ptz.body_names[i] for i in range(ptz.num_bodies)])
+    
     while simulation_app.is_running():
         with torch.inference_mode():
             
@@ -138,7 +142,7 @@ def main():
             q_lo = ptz.data.joint_pos_limits[:, [pan_id, tilt_id], 0]  # (N,2)
             q_hi = ptz.data.joint_pos_limits[:, [pan_id, tilt_id], 1]  # (N,2)
 
-            # print env0
+            # # print env0
             # print(
             #     f"PTZ env0 | q=[pan {q[0,0].item():+.4f}, tilt {q[0,1].item():+.4f}] "
             #     f"| tgt=[pan {q_tgt[0,0].item():+.4f}, tilt {q_tgt[0,1].item():+.4f}] "
@@ -157,15 +161,15 @@ def main():
             
             
             # --- PTZ DIAGNOSTIC ---
-            update_ptz_debug_vis(
-                ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
-                ee_pos_w=ee_pos_w,
-                ptz_pos_w=ptz_pos_w,
-                pan=ptz_action[:, 0],
-                tilt=ptz_action[:, 1],
-                ptz=ptz,
-                device=args_cli.device,
-            )
+            # update_ptz_debug_vis(
+            #     ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
+            #     ee_pos_w=ee_pos_w,
+            #     ptz_pos_w=ptz_pos_w,
+            #     pan=ptz_action[:, 0],
+            #     tilt=ptz_action[:, 1],
+            #     ptz=ptz,
+            #     device=args_cli.device,
+            # )
             
             
             ptz_zero_action = torch.zeros_like(ptz_action)
