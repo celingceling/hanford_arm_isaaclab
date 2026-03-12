@@ -148,7 +148,7 @@ PTZ_CFG = ArticulationCfg(
                 "J1": 100.0, # Pan
                 "J2": 100.0, # Tilt
                 },
-            effort_limit={
+            effort_limit_sim={
                 "J1": 100.0, # Pan
                 "J2": 100.0, # Tilt
                 },

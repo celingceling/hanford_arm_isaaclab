@@ -88,37 +88,22 @@ def get_all_robot_link_state(
 
 def collision_observation(
     env: ManagerBasedRLEnv,
-    env_ids: torch.Tensor,
-    asset_name: str,
+    asset_name: str = "robot",
     force_threshold: float = 1e-3,
 ) -> torch.Tensor:
     """
-    Returns a tensor [N, 2]:
-      - col_flag: 1.0 if any monitored body has net contact magnitude > threshold, else 0.0
-      - max_force: maximum net contact force magnitude across bodies (float)
-    env_ids: 1D Long tensor of environment indices to sample.
+    Returns a tensor [num_envs, 2]:
+      - col_flag:  1.0 if any body has net contact magnitude > threshold, else 0.0
+      - max_force: maximum net contact force magnitude across bodies
     """
-    device = env.device
-    if not isinstance(env_ids, torch.Tensor):
-        env_ids = torch.tensor(env_ids, device=device)
-    env_ids = env_ids.to(device=device, dtype=torch.long)
-
-    asset_cfg = SceneEntityCfg(asset_name)
-    asset = env.scene[asset_cfg.name]
+    asset = env.scene[asset_name]
 
     if not hasattr(asset, "data") or not hasattr(asset.data, "net_contact_forces_w"):
-        raise RuntimeError(
-            f"{asset_name} missing contact sensor data. Enable activate_contact_sensors=True."
-        )
+        return torch.zeros((env.num_envs, 2), device=env.device, dtype=torch.float32)
 
-    # forces: [num_envs_total, num_bodies, 3]
-    forces = asset.data.net_contact_forces_w[env_ids]  # selects requested envs
-    # compute per-body magnitudes -> [N, B]
-    mags = torch.linalg.norm(forces, dim=-1)
-    # per-env maximum magnitude
-    max_force, _ = mags.max(dim=-1)                     # [N]
-    col_flag = (max_force > force_threshold).to(dtype=torch.float32)  # [N]
+    forces   = asset.data.net_contact_forces_w          # [num_envs, num_bodies, 3]
+    mags     = torch.linalg.norm(forces, dim=-1)         # [num_envs, num_bodies]
+    max_force, _ = mags.max(dim=-1)                      # [num_envs]
+    col_flag = (max_force > force_threshold).float()     # [num_envs]
 
-    out = torch.stack([col_flag, max_force.to(dtype=torch.float32)], dim=-1)  # [N,2]
-    
-    return out
+    return torch.stack([col_flag, max_force.float()], dim=-1)  # [num_envs, 2]

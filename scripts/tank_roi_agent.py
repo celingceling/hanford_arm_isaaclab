@@ -95,9 +95,13 @@ def main():
 
     ee_body_ids, _ = robot.find_bodies("end_effector")
     ee_body_idx = int(ee_body_ids[0])
+    
+    ptz_root_pos_w = ptz.data.root_pos_w
+    print("PTZ root pos: ", ptz_root_pos_w)
 
-    print("PTZ joint names:", ptz.data.joint_names)
-    print("PTZ body names:", [ptz.body_names[i] for i in range(ptz.num_bodies)])
+    print("PTZ body names:", ptz.body_names)
+    print("ptz_body_idx:", ptz_body_idx)
+    print("Tilt_Link pos:", ptz.data.body_pos_w[:, ptz_body_idx, :])
     
     while simulation_app.is_running():
         with torch.inference_mode():

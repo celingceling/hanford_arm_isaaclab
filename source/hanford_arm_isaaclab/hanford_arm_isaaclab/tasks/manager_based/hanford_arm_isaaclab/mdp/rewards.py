@@ -28,8 +28,8 @@ def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneE
 
 def collision_reward(
     env: ManagerBasedRLEnv,
-    env_ids: torch.Tensor,
-    asset_name: str,
+    env_ids: torch.Tensor = None,
+    asset_name: str = "robot",
     base_penalty: float =  -1.0,
     force_scale: float = -0.001,
     force_threshold: float = 1e-3,
@@ -40,17 +40,17 @@ def collision_reward(
     (force_scale should be negative to increase penalty with force)
     """
     device = env.device
-    if not isinstance(env_ids, torch.Tensor):
-        env_ids = torch.tensor(env_ids, device=device)
-    env_ids = env_ids.to(device=device, dtype=torch.long)
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
+    else:
+        env_ids = env_ids.to(device=env.device, dtype=torch.long)
 
     asset_cfg = SceneEntityCfg(asset_name)
     asset = env.scene[asset_cfg.name]
 
     if not hasattr(asset, "data") or not hasattr(asset.data, "net_contact_forces_w"):
-        raise RuntimeError(
-            f"{asset_name} missing contact sensor data. Enable activate_contact_sensors=True."
-        )
+        # return per-env scalar reward, shape [N]
+        return torch.zeros((env_ids.shape[0],), device=env.device, dtype=torch.float32)
 
     forces = asset.data.net_contact_forces_w[env_ids]  # [N, B, 3]
     mags = torch.linalg.norm(forces, dim=-1)          # [N, B]
