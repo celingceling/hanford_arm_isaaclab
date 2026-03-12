@@ -319,26 +319,26 @@ class EventCfg:
         },
     )
     
-    reset_ptz_joints = EventTerm(
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("ptz"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    # reset_ptz_joints = EventTerm(
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("ptz"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
     
-    # reset joints to zero state
-    reset_robot_joints = EventTerm( # probably a more direct function than this one exists
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    # # reset joints to zero state
+    # reset_robot_joints = EventTerm( # probably a more direct function than this one exists
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
 
 
 @configclass
@@ -471,7 +471,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 6.0
+        self.episode_length_s = .75
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings

@@ -45,7 +45,7 @@ def make_ptz_debug_visualizers(device: str):
             prim_path="/Visuals/ptz_arrow",
             markers={
                 "arrow": sim_utils.CylinderCfg(
-                    radius=0.02,
+                    radius=0.005,
                     height=0.6,
                     axis="X",  # long axis along X so quaternion rotation is intuitive
                     visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.4, 1.0)),

@@ -50,16 +50,16 @@ def compute_ptz_action(ptz_pos_w, ee_pos_w, **kwargs):
     delta = ee_pos_w - ptz_pos_w
 
     # PTZ faces -Y in world frame, so pan=0 when EE is in -Y direction
-    pan = torch.atan2(-delta[:, 0], -delta[:, 1]) * 1.75
+    pan = torch.atan2(-delta[:, 0], -delta[:, 1])
 
     horiz_dist = torch.norm(delta[:, :2], dim=1)
     tilt = -torch.atan2(delta[:, 2], horiz_dist)
     tilt = torch.clamp(tilt, -50 * math.pi / 180.0, 230 * math.pi / 180.0)
     
-    # # DEBUG: EE 0.5 m in front of PTZ (PTZ forward = -Y in world)
+    # # DEBUG (-Y is forward):
     # delta_zero = torch.zeros_like(delta)
-    # delta_zero[:, 0] = 0.7  # -Y forward
-    # delta_zero[:, 1] = -0.7  # -Y forward
+    # delta_zero[:, 0] = 0.7
+    # delta_zero[:, 1] = -0.7
     
     # pan = torch.atan2(-delta_zero[:, 0], -delta_zero[:, 1]) * 2.0
 
@@ -87,21 +87,21 @@ def main():
     
     env.reset()
 
+
     # simulate environment
-    # ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
+    ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
 
     ptz_body_ids, _ = ptz.find_bodies("Tilt_Link")
     ptz_body_idx = int(ptz_body_ids[0])
 
     ee_body_ids, _ = robot.find_bodies("end_effector")
     ee_body_idx = int(ee_body_ids[0])
-    
-    ptz_root_pos_w = ptz.data.root_pos_w
-    print("PTZ root pos: ", ptz_root_pos_w)
 
     print("PTZ body names:", ptz.body_names)
-    print("ptz_body_idx:", ptz_body_idx)
-    print("Tilt_Link pos:", ptz.data.body_pos_w[:, ptz_body_idx, :])
+    print("PTZ joint names: ", ptz.joint_names)
+    
+    print("robot body names:", robot.body_names)
+    print("robot joint names: ", robot.joint_names)
     
     while simulation_app.is_running():
         with torch.inference_mode():
@@ -115,6 +115,14 @@ def main():
             ptz_pos_w = ptz.data.body_pos_w[:, ptz_body_idx, :]
             ptz_root_quat_w = ptz.data.root_quat_w
             
+            # DEBUG print root pos
+            # ptz_root_pos_w = ptz.data.root_pos_w
+            # print("PTZ root pos: ", ptz_root_pos_w)
+            # robot_root_pos_w = robot.data.root_pos_w
+            # print("robot root pos: ", robot_root_pos_w)
+            # for i, name in enumerate(ptz.body_names):
+            #     print(f"{name}: {ptz.data.body_pos_w[0, i, :]}")
+            
             # get ee pos in world frame
             ee_pos_w = robot.data.body_pos_w[:, ee_body_idx, :]
             
@@ -127,21 +135,27 @@ def main():
                 ptz_root_quat_w=ptz_root_quat_w,
                 )
             
-            # --- PTZ DIAGNOSTIC ---
-            # update_ptz_debug_vis(
-            #     ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
-            #     ee_pos_w=ee_pos_w,
-            #     ptz_pos_w=ptz_pos_w,
-            #     pan=ptz_action[:, 0],
-            #     tilt=ptz_action[:, 1],
-            #     ptz=ptz,
-            #     device=args_cli.device,
-            # )
+            print("PTZ joint pos:", ptz.data.joint_pos)
+            
+            print("PTZ computed action: ", ptz_action)
     
-            # ptz_zero_action = torch.zeros_like(ptz_action)
+            ptz_action = torch.zeros_like(ptz_action)
+            
+            # --- PTZ DIAGNOSTIC ---
+            update_ptz_debug_vis(
+                ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
+                ee_pos_w=ee_pos_w,
+                ptz_pos_w=ptz_pos_w,
+                pan=ptz_action[:, 0],
+                tilt=ptz_action[:, 1],
+                ptz=ptz,
+                device=args_cli.device,
+            )
             
             # write directly to articulation buffer (no MDP terms)
-            ptz.set_joint_position_target(ptz_action)
+            # ptz.set_joint_position_target(ptz_action)
+            
+            # ptz.write_data_to_sim()
             
             # step (applies arm command + physics + ptz action)
             env.step(arm_command)

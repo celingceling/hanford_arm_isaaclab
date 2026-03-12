@@ -87,13 +87,36 @@ def reset_multi_from_3_spots(
     pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3]
     pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] + ptz_offset
     
-    vel = torch.zeros(n,6, device=device) # don't move
+    # zero velocity
+    vel = torch.zeros(n,6, device=device)
     
+    # set robot joint pos/vel to zero
+    n_robot_joints = robot.num_joints  # 7 i think i forgot 
+    q_zero_robot  = torch.zeros((n, n_robot_joints), device=device)
+    qd_zero_robot = torch.zeros((n, n_robot_joints), device=device)
+    
+    # set ptz joint pos/vel to zero
+    n_ptz_joints = ptz.num_joints  # 2
+    q_zero_ptz  = torch.zeros((n, n_ptz_joints), device=device)
+    qd_zero_ptz = torch.zeros((n, n_ptz_joints), device=device)
+    
+    # set TARGETS to zero so it doesn't generate corrective torque (reset actuators)
+    robot.set_joint_position_target(q_zero_robot, env_ids=env_ids) 
+    robot.write_data_to_sim() # send target buffer ^^^ to sim
+    
+    ptz.set_joint_position_target(q_zero_ptz, env_ids=env_ids)
+    ptz.write_data_to_sim()
+    
+    # write states to sim
     robot.write_root_pose_to_sim(pose_robot,env_ids=env_ids)
     robot.write_root_velocity_to_sim(vel,env_ids=env_ids)
-    
+    # robot.write_joint_state_to_sim(q_zero_robot, qd_zero_robot, env_ids=env_ids)
+
     ptz.write_root_pose_to_sim(pose_ptz,env_ids=env_ids)
     ptz.write_root_velocity_to_sim(vel,env_ids=env_ids)
+    # ptz.write_joint_state_to_sim(q_zero_ptz, qd_zero_ptz, env_ids=env_ids)
+    
+
 
 def reset_joints_uniform_within_limits(
     env: ManagerBasedRLEnv,
