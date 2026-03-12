@@ -41,9 +41,6 @@ import isaaclab.sim as sim_utils
 from util.debug_viz import *
 import hanford_arm_isaaclab.tasks  # noqa: F401
 
-PAN_OFFSET  =  1.89   # rad — joint value when camera is at physical zero (facing -Y world)
-TILT_OFFSET =  0.0    # tilt looks close to zero at rest, may need minor tuning
-
 def compute_ptz_action(ptz_pos_w, ee_pos_w, **kwargs):
     if ptz_pos_w.ndim == 3:
         ptz_pos_w = ptz_pos_w[:, 0, :]
@@ -72,11 +69,6 @@ def compute_ptz_action(ptz_pos_w, ee_pos_w, **kwargs):
 
     return torch.stack([pan, tilt], dim=1)
 
-
-
-def wrap_to_pi(x: torch.Tensor) -> torch.Tensor:
-    return (x + math.pi) % (2 * math.pi) - math.pi
-
 def main():
     """Agent that sends pose commands from random sample inside tank.
     
@@ -96,7 +88,7 @@ def main():
     env.reset()
 
     # simulate environment
-    ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
+    # ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
 
     ptz_body_ids, _ = ptz.find_bodies("Tilt_Link")
     ptz_body_idx = int(ptz_body_ids[0])
@@ -118,7 +110,6 @@ def main():
             # get ptz command
             ptz_pos_w = ptz.data.body_pos_w[:, ptz_body_idx, :]
             ptz_root_quat_w = ptz.data.root_quat_w
-            ptz_root_w = ptz.data.root_pos_w
             
             # get ee pos in world frame
             ee_pos_w = robot.data.body_pos_w[:, ee_body_idx, :]
@@ -126,39 +117,11 @@ def main():
             ptz_pos_w = ptz.data.body_pos_w[:, ptz_body_idx, :]   # (N,3)
             ee_pos_w  = robot.data.body_pos_w[:, ee_body_idx, :]  # (N,3)
             
-            
-            # DEBUG
-            # ptz joints (names: J1=pan, J2=tilt)
-            ptz_joint_ids = ptz.find_joints(["J1", "J2"])[0]  # ids
-            pan_id, tilt_id = int(ptz_joint_ids[0]), int(ptz_joint_ids[1])
-
-            # current positions (rad)
-            q = ptz.data.joint_pos[:, [pan_id, tilt_id]]  # (N,2)
-
-            # targets (rad) - if you set them via set_joint_position_target(...)
-            q_tgt = ptz.data.joint_pos_target[:, [pan_id, tilt_id]]  # (N,2)
-
-            # limits (rad)
-            q_lo = ptz.data.joint_pos_limits[:, [pan_id, tilt_id], 0]  # (N,2)
-            q_hi = ptz.data.joint_pos_limits[:, [pan_id, tilt_id], 1]  # (N,2)
-
-            # # print env0
-            # print(
-            #     f"PTZ env0 | q=[pan {q[0,0].item():+.4f}, tilt {q[0,1].item():+.4f}] "
-            #     f"| tgt=[pan {q_tgt[0,0].item():+.4f}, tilt {q_tgt[0,1].item():+.4f}] "
-            #     f"| diff=[pan {(q_tgt[0,0].item()-q[0,0].item()):+.4f}, tilt {(q_tgt[0,1].item()-q[0,1].item()):+.4f}] "
-            #     # f"| lim=[pan ({q_lo[0,0].item():+.4f},{q_hi[0,0].item():+.4f}), "
-            #     # f"tilt ({q_lo[0,1].item():+.4f},{q_hi[0,1].item():+.4f})]"
-            # )
-            
-            
-            
             ptz_action = compute_ptz_action(
                 ptz_pos_w=ptz_pos_w, 
                 ee_pos_w=ee_pos_w,
                 ptz_root_quat_w=ptz_root_quat_w,
                 )
-            
             
             # --- PTZ DIAGNOSTIC ---
             # update_ptz_debug_vis(
@@ -170,9 +133,8 @@ def main():
             #     ptz=ptz,
             #     device=args_cli.device,
             # )
-            
-            
-            ptz_zero_action = torch.zeros_like(ptz_action)
+    
+            # ptz_zero_action = torch.zeros_like(ptz_action)
             
             # write directly to articulation buffer (no MDP terms)
             ptz.set_joint_position_target(ptz_action)

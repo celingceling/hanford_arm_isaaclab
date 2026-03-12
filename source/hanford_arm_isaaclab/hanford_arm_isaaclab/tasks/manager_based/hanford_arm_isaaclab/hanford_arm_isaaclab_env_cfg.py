@@ -67,6 +67,8 @@ POSES_W[1, 0:3] = torch.tensor([1.012, 0.414, 2.0], dtype=torch.float32)
 POSES_W[2, 0:3] = torch.tensor([1.678, -0.976, 2.0], dtype=torch.float32)
 # POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
 
+CONTACT_BUFFER = 0.3
+
 ##
 # Configuration
 ##
@@ -75,7 +77,7 @@ POSES_W[2, 0:3] = torch.tensor([1.678, -0.976, 2.0], dtype=torch.float32)
 ARM_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=ARM_USD_PATH,
-        activate_contact_sensors=False, # add contact sensors and set to true later
+        activate_contact_sensors=True, # add contact sensors and set to true later
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
         )
@@ -123,7 +125,7 @@ ARM_CFG = ArticulationCfg(
 PTZ_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=PTZ_USD_PATH,
-        activate_contact_sensors=False, # add contact sensors and set to true later
+        activate_contact_sensors=True, # add contact sensors and set to true later
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
         ),
@@ -212,21 +214,6 @@ class CommandsCfg:
         Command terms for the MDP.
         Randomly samples EE target poses
     """
-
-    # ee_pose = base_mdp.UniformPoseCommandCfg( # samples from ROBOT FRAME not world frame
-    #     asset_name="robot",
-    #     body_name="end_effector", # end effector
-    #     resampling_time_range=(4.0, 4.0), # send new command ever 4 seconds
-    #     debug_vis=True,
-    #     ranges=base_mdp.UniformPoseCommandCfg.Ranges(  # world_AABB = Translate + unitsResolve ⊙ extent
-    #         pos_x = (-1.8825, 2.4927), # tank ROI with 0.2 margin
-    #         pos_y = (-1.4868, 1.1358),
-    #         pos_z = (-1.0, 1.0),
-    #         roll=(0.0, 0.0), # also figure out axis stuff
-    #         pitch=(0.0, 0.0),  # lock pitch and roll for now
-    #         yaw=(-3.14, 3.14),
-    #     ),
-    # )
     
     ee_pose = mdp.WorldFrameUniformPoseCommandCfg(
         asset_name="robot",
@@ -302,6 +289,12 @@ class ObservationsCfg:
         )
         actions = ObsTerm(func=base_mdp.last_action)
         
+        arm_collision_flag = ObsTerm(
+            func=mdp.collision_observation,
+            params={"asset_name": "robot"}
+        )
+        
+        
         def __post_init__(self):
             self.enable_corruption = False # i think this adds some noise during training, set as false for now
             self.concatenate_terms = True
@@ -335,24 +328,7 @@ class EventCfg:
             "velocity_range": (0.0, 0.0),
         },
     )
-    # reset_arm_root = EventTerm(
-    #     func=mdp.reset_from_3_spots,
-    #     mode="reset",
-    #     params={
-    #         "poses_w": POSES_W,
-    #         "asset_name": "robot",
-    #     },
-    # )
     
-    # reset_ptz_root = EventTerm(
-    #     func=mdp.reset_from_3_spots,
-    #     mode="reset",
-    #     params={
-    #         "poses_w": POSES_W,
-    #         "asset_name": "ptz",
-    #     },
-    # )
-
     # reset joints to zero state
     reset_robot_joints = EventTerm( # probably a more direct function than this one exists
         func=base_mdp.reset_joints_by_offset,
@@ -365,15 +341,30 @@ class EventCfg:
     )
 
 
-
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP.""" # ignore for now
 
-    # (1) Constant running reward
-    alive = RewTerm(func=base_mdp.is_alive, weight=1.0)
-    # (2) Failure penalty
-    terminating = RewTerm(func=base_mdp.is_terminated, weight=-2.0)
+    # Constant running reward
+    alive = RewTerm(
+        func=base_mdp.is_alive, 
+        weight=1.0
+        )
+    
+    # Failure penalty
+    terminating = RewTerm(
+        func=base_mdp.is_terminated, 
+        weight=-2.0
+        )
+    
+    # Collisions
+    arm_collision = RewTerm(
+        func=mdp.collision_reward, 
+        weight=-1.0,
+        params={"asset_name": "robot"}
+        )
+    
+    
 
 # Claude's RewardsCfg, figure out later
 # class RewardsCfg:
@@ -429,11 +420,9 @@ class TerminationsCfg:
 
     # (1) Time out
     time_out = DoneTerm(func=base_mdp.time_out, time_out=True)
-    # # (2) Collision
-    # cart_out_of_bounds = DoneTerm(
-    #     func=mdp.joint_pos_out_of_manual_limit,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]), "bounds": (-3.0, 3.0)},
-    # )
+    
+    # (2) Collision
+    collided = DoneTerm(func=mdp.check_collision, time_out=True)
 
 
 # reach gradually increases action rate and joint velocity penalty weights over num_steps. 
@@ -484,10 +473,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         self.decimation = 2
         self.episode_length_s = 6.0
         # viewer settings
-        self.viewer.eye = (8.0, 0.0, 5.0)
+        self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
-        
-        # prim = sim_utils.get_prim_at_path(EE_LIGHT_PRIM)
-        # sim_utils.safe_set_attribute_on_usd_prim(prim, "inputs:intensity", 0.0, camel_case=False)

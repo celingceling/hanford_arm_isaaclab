@@ -1,11 +1,3 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
-from __future__ import annotations
-
-from dataclasses import MISSING
 from typing import TYPE_CHECKING
 
 import torch
@@ -16,109 +8,38 @@ from isaaclab.utils.math import wrap_to_pi
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    
 
-POSITIONS = (
-    (0.0, 0.0, 0.0),
-    (0.0, 0.0, 0.0),
-    (0.0, 0.0, 0.0)
-)
-
-def reset_from_3_spots(
+def check_collision(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor,
-    poses_w: torch.Tensor, # [3,7] (x,y,z,qw,qx,qy,qz)
     asset_name: str,
-    ):
+    force_threshold: float = 1e-3,
+    ) -> torch.Tensor:
     
-    """ Reset root to one of 3 randomly sampled positions """
+    """Terminate when the asset is in contact (net contact force > threshold).
+
+    Returns:
+        torch.BoolTensor [len(env_ids)] True if collision detected in that env.
+    """
+    # normalize env_ids
+    if not isinstance(env_ids, torch.Tensor):
+        env_ids = torch.tensor(env_ids, device=env.device)
+    env_ids = env_ids.to(device=env.device, dtype=torch.long)
     
-    # define asset (robot)
+    
     asset_cfg = SceneEntityCfg(asset_name)
     asset = env.scene[asset_cfg.name]
     
-    # pick random pose to reset to via index
-    idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
-    poses_w = poses_w.to(device=asset.device) # move poses to gpu
-    pose = poses_w[idx].clone()
-    pose[:, 0:3] += env.scene.env_origins[env_ids] # keep per-env origin behavior (aka taking relative pos to global)
-    # note: does this mean each env has the same random config, or is each env unique and random
-    # answer: no because idx is a env_id length tensor (see above), so each is different index
-    
-    vel = torch.zeros((len(env_ids),6), device=asset.device) # don't move
-    
-    asset.write_root_pose_to_sim(pose,env_ids=env_ids)
-    asset.write_root_velocity_to_sim(vel,env_ids=env_ids)
-    
-def reset_multi_from_3_spots(
-    env: ManagerBasedRLEnv,
-    env_ids: torch.Tensor,
-    poses_w: torch.Tensor, # [3,7] (x,y,z,qw,qx,qy,qz)
-    asset_names: list[str] = ["robot", "ptz"],
-    ):
-    
-    """ Reset root to one of 3 randomly sampled positions """
-    
-    device = env_ids.device
-    env_ids = env_ids.to(device=device, dtype=torch.long)
-    poses_w = poses_w.to(device=device, dtype=torch.float32)
-    n = env_ids.numel()
-    origins = env.scene.env_origins[env_ids]  # [n,3]
-    ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
-    
-    # define assets
-    robot = env.scene[asset_names[0]]
-    ptz= env.scene[asset_names[1]]
-    
-    default_root_robot = robot.data.default_root_state[env_ids]  # [n, 13]
-    default_root_ptz = ptz.data.default_root_state[env_ids]  # [n, 13]
-    
-    # pick random pose to reset to
-    idx_robot = torch.randint(0, 3, (n,), device=device)
-    idx_ptx = torch.randint(0, 2, (n,), device=device) # note only picks 0 or 1
-    
-    idx_ptx = idx_ptx + (idx_ptx >= idx_robot).to(idx_ptx.dtype) # if idx_1 is same or greater than idx_0, flags true and + 1
-    # will never index out of bounds bc idx_1 only goes up to 2 
+    # check if contact sensor enabled
+    if not hasattr(asset, "data") or not hasattr(asset.data, "net_contact_forces_w"):
+        raise RuntimeError(
+            f"{asset_name} has no net_contact_forces_w. "
+            f"Enable contact sensors (activate_contact_sensors=True) on its spawn cfg."
+        )
 
-    # initialize as default state
-    pose_robot = default_root_robot[:, :7].clone() 
-    pose_ptz = default_root_ptz[:, :7].clone() 
+    forces_w = asset.data.net_contact_forces_w[env_ids]  # [n, B, 3]
+    mags = torch.linalg.norm(forces_w, dim=-1)           # [n, B]
+    in_contact = (mags.max(dim=-1).values > force_threshold)  # [n]
     
-    # keep per-env origin behavior (aka taking relative pos to global)
-    pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3]
-    pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] + ptz_offset
-    
-    vel = torch.zeros(n,6, device=device) # don't move
-    
-    robot.write_root_pose_to_sim(pose_robot,env_ids=env_ids)
-    robot.write_root_velocity_to_sim(vel,env_ids=env_ids)
-    
-    ptz.write_root_pose_to_sim(pose_ptz,env_ids=env_ids)
-    ptz.write_root_velocity_to_sim(vel,env_ids=env_ids)
-
-def reset_joints_uniform_within_limits(
-    env: ManagerBasedRLEnv,
-    env_ids: torch.Tensor,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-):
-    """ Reset joints by sampling q within joint limits """
-    asset = env.scene[asset_cfg.name]
-    
-    # get env_ids and reshape according to whatever the joint ids shape is
-    # if the selection of joints isn't ALL of the joints (aka not a slice but a cherry picked list), 
-    # add a new dimension because it would be in the wrong format
-    iter_env_ids = env_ids[:, None] if asset_cfg.joint_ids != slice(None) else env_ids
-    
-    # get joint limits
-    limits = asset.data.soft_joint_pos_limits[iter_env_ids, asset_cfg.joint_ids]
-    q_min = limits[..., 0] # take index 0 of last dimension, last dimension is [min, max]
-    q_max = limits[..., 1] # ... means keep everything else [:, :, 1]
-    
-    # uniform sample per joint per env
-    q = q_min + (q_max - q_min) * torch.rand_like(q_min)
-    
-    # don't move
-    qd = torch.zeros_like(q)
-    
-    # go sim
-    asset.write_joint_state_to_sim(q, qd, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)    
-    
+    return in_contact
