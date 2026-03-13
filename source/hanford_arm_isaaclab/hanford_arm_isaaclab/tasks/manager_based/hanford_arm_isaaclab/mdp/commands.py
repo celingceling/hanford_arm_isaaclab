@@ -128,9 +128,9 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
             #         "reachable:", reachable.float().mean().item(),
             #         "ee step ok:", step_ok.float().mean().item(),
             #         )
-            valid = step_ok
+            # valid = step_ok
             # valid = reachable & step_ok
-            # valid = in_tank & reachable & step_ok
+            valid = in_tank & reachable & step_ok
 
             # accept valid samples
             if valid.any():

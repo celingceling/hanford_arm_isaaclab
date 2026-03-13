@@ -23,11 +23,11 @@ POSITIONS = (
     (0.0, 0.0, 0.0)
 )
 
-def reset_from_3_spots(
+def reset_robot_from_3_spots(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor,
     poses_w: torch.Tensor, # [3,7] (x,y,z,qw,qx,qy,qz)
-    asset_name: str,
+    asset_name: str="robot",
     ):
     
     """ Reset root to one of 3 randomly sampled positions """
@@ -35,14 +35,46 @@ def reset_from_3_spots(
     # define asset (robot)
     asset_cfg = SceneEntityCfg(asset_name)
     asset = env.scene[asset_cfg.name]
+    origins = env.scene.env_origins[env_ids]
     
     # pick random pose to reset to via index
     idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
     poses_w = poses_w.to(device=asset.device) # move poses to gpu
-    pose = poses_w[idx].clone()
-    pose[:, 0:3] += env.scene.env_origins[env_ids] # keep per-env origin behavior (aka taking relative pos to global)
-    # note: does this mean each env has the same random config, or is each env unique and random
-    # answer: no because idx is a env_id length tensor (see above), so each is different index
+    
+    default_root = asset.data.default_root_state[env_ids]
+    pose = default_root[:, :7].clone()
+    pose[:, 0:3] = poses_w[idx, 0:3] + origins # keep per-env 
+    
+    vel = torch.zeros((len(env_ids),6), device=asset.device) # don't move
+    
+    asset.write_root_pose_to_sim(pose,env_ids=env_ids)
+    asset.write_root_velocity_to_sim(vel,env_ids=env_ids)
+    
+def reset_ptz_from_3_spots(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    poses_w: torch.Tensor, # [3,7] (x,y,z,qw,qx,qy,qz)
+    asset_name: str="ptz",
+    ):
+    
+    """ Reset root to one of 3 randomly sampled positions """
+    
+    # define asset (ptz)
+    asset_cfg = SceneEntityCfg(asset_name)
+    asset = env.scene[asset_cfg.name]
+    origins = env.scene.env_origins[env_ids]
+    device = env_ids.device
+    
+    # want ptz to be slightly higher
+    ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
+    
+    # pick random pose to reset to via index
+    idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
+    poses_w = poses_w.to(device=asset.device) # move poses to gpu
+    
+    default_root = asset.data.default_root_state[env_ids]
+    pose = default_root[:, :7].clone()
+    pose[:, 0:3] = poses_w[idx, 0:3] + origins + ptz_offset # keep per-env 
     
     vel = torch.zeros((len(env_ids),6), device=asset.device) # don't move
     
@@ -58,37 +90,44 @@ def reset_multi_from_3_spots(
     
     """ Reset root to one of 3 randomly sampled positions """
     
+    # put poses on correct device (gpu)
     device = env_ids.device
     env_ids = env_ids.to(device=device, dtype=torch.long)
     poses_w = poses_w.to(device=device, dtype=torch.float32)
+    
     n = env_ids.numel()
     origins = env.scene.env_origins[env_ids]  # [n,3]
+    
+    # want ptz to be slightly higher
     ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
     
     # define assets
     robot = env.scene[asset_names[0]]
     ptz= env.scene[asset_names[1]]
     
+    # default state = what IsaacLab has cached at scene start-up
     default_root_robot = robot.data.default_root_state[env_ids]  # [n, 13]
-    default_root_ptz = ptz.data.default_root_state[env_ids]  # [n, 13]
+    default_root_ptz = ptz.data.default_root_state[env_ids]  # from PTZ_CFG, init_state: rot=(0, 0, 1, 0)
+    
+    print("PTZ default root state: ", default_root_ptz)
     
     # pick random pose to reset to
     idx_robot = torch.randint(0, 3, (n,), device=device)
     idx_ptx = torch.randint(0, 2, (n,), device=device) # note only picks 0 or 1
-    
     idx_ptx = idx_ptx + (idx_ptx >= idx_robot).to(idx_ptx.dtype) # if idx_1 is same or greater than idx_0, flags true and + 1
     # will never index out of bounds bc idx_1 only goes up to 2 
 
     # initialize as default state
-    pose_robot = default_root_robot[:, :7].clone() 
+    pose_robot = default_root_robot[:, :7].clone() # gets [x, y, z, w, i, j ,k]
     pose_ptz = default_root_ptz[:, :7].clone() 
     
     # keep per-env origin behavior (aka taking relative pos to global)
-    pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3]
+    pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3] # get env origin + [x,y,z] from desired poses
     pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] + ptz_offset
+    # potential problem: i only replace 0:3 and 3:7 are left as whatever the was cached for default.........
     
     # zero velocity
-    vel = torch.zeros(n,6, device=device)
+    vel = torch.zeros(n,6, device=device) # is this the right shape?
     
     # set robot joint pos/vel to zero
     n_robot_joints = robot.num_joints  # 7 i think i forgot 
@@ -101,8 +140,8 @@ def reset_multi_from_3_spots(
     qd_zero_ptz = torch.zeros((n, n_ptz_joints), device=device)
     
     # set TARGETS to zero so it doesn't generate corrective torque (reset actuators)
-    robot.set_joint_position_target(q_zero_robot, env_ids=env_ids) 
-    robot.write_data_to_sim() # send target buffer ^^^ to sim
+    # robot.set_joint_position_target(q_zero_robot, env_ids=env_ids) 
+    # robot.write_data_to_sim() # send target buffer ^^^ to sim
     
     ptz.set_joint_position_target(q_zero_ptz, env_ids=env_ids)
     ptz.write_data_to_sim()
@@ -114,7 +153,7 @@ def reset_multi_from_3_spots(
 
     ptz.write_root_pose_to_sim(pose_ptz,env_ids=env_ids)
     ptz.write_root_velocity_to_sim(vel,env_ids=env_ids)
-    # ptz.write_joint_state_to_sim(q_zero_ptz, qd_zero_ptz, env_ids=env_ids)
+    ptz.write_joint_state_to_sim(q_zero_ptz, qd_zero_ptz, env_ids=env_ids)
     
 
 

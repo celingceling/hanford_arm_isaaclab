@@ -89,7 +89,7 @@ def main():
 
 
     # simulate environment
-    ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
+    # ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
 
     ptz_body_ids, _ = ptz.find_bodies("Tilt_Link")
     ptz_body_idx = int(ptz_body_ids[0])
@@ -135,22 +135,22 @@ def main():
                 ptz_root_quat_w=ptz_root_quat_w,
                 )
             
-            print("PTZ joint pos:", ptz.data.joint_pos)
+            # print("PTZ joint pos:", ptz.data.joint_pos)
             
-            print("PTZ computed action: ", ptz_action)
+            # print("PTZ computed action: ", ptz_action)
     
             ptz_action = torch.zeros_like(ptz_action)
             
             # --- PTZ DIAGNOSTIC ---
-            update_ptz_debug_vis(
-                ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
-                ee_pos_w=ee_pos_w,
-                ptz_pos_w=ptz_pos_w,
-                pan=ptz_action[:, 0],
-                tilt=ptz_action[:, 1],
-                ptz=ptz,
-                device=args_cli.device,
-            )
+            # update_ptz_debug_vis(
+            #     ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
+            #     ee_pos_w=ee_pos_w,
+            #     ptz_pos_w=ptz_pos_w,
+            #     pan=ptz_action[:, 0],
+            #     tilt=ptz_action[:, 1],
+            #     ptz=ptz,
+            #     device=args_cli.device,
+            # )
             
             # write directly to articulation buffer (no MDP terms)
             # ptz.set_joint_position_target(ptz_action)

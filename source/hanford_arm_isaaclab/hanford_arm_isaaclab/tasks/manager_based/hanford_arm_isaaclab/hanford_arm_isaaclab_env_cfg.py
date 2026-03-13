@@ -65,7 +65,7 @@ POSES_W = torch.zeros((3, 7), dtype=torch.float32)  # 3 poses, each [x,y,z,qw,qx
 POSES_W[0, 0:3] = torch.tensor([-0.554, 0.01, 2.0], dtype=torch.float32)
 POSES_W[1, 0:3] = torch.tensor([1.012, 0.414, 2.0], dtype=torch.float32)
 POSES_W[2, 0:3] = torch.tensor([1.678, -0.976, 2.0], dtype=torch.float32)
-# POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
+POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
 
 CONTACT_BUFFER = 0.3
 
@@ -125,7 +125,7 @@ ARM_CFG = ArticulationCfg(
 PTZ_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=PTZ_USD_PATH,
-        activate_contact_sensors=True, # add contact sensors and set to true later
+        activate_contact_sensors=False, # add contact sensors and set to true later
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
         ),
@@ -311,34 +311,52 @@ class EventCfg:
     """
     
     # reset joint configuration in random config
-    reset_roots = EventTerm(
-        func=mdp.reset_multi_from_3_spots,
+    # reset_roots = EventTerm(
+    #     func=mdp.reset_multi_from_3_spots,
+    #     mode="reset",
+    #     params={
+    #         "poses_w": POSES_W,
+    #     },
+    # )
+    
+    reset_robot_roots = EventTerm(
+        func=mdp.reset_robot_from_3_spots,
         mode="reset",
         params={
+            "asset_name": "robot",
             "poses_w": POSES_W,
         },
     )
     
-    # reset_ptz_joints = EventTerm(
-    #     func=base_mdp.reset_joints_by_offset,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("ptz"),
-    #         "position_range": (0.0, 0.0),
-    #         "velocity_range": (0.0, 0.0),
-    #     },
-    # )
+    reset_ptz_roots = EventTerm(
+        func=mdp.reset_ptz_from_3_spots,
+        mode="reset",
+        params={
+            "asset_name": "ptz",
+            "poses_w": POSES_W,
+        },
+    )
     
-    # # reset joints to zero state
-    # reset_robot_joints = EventTerm( # probably a more direct function than this one exists
-    #     func=base_mdp.reset_joints_by_offset,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot"),
-    #         "position_range": (0.0, 0.0),
-    #         "velocity_range": (0.0, 0.0),
-    #     },
-    # )
+    reset_ptz_joints = EventTerm(
+        func=base_mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("ptz"),
+            "position_range": (0.0, 0.0),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+    
+    # reset joints to zero state
+    reset_robot_joints = EventTerm( # probably a more direct function than this one exists
+        func=base_mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "position_range": (0.0, 0.0),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
 
 
 @configclass
@@ -471,7 +489,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = .75
+        self.episode_length_s = 2.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
