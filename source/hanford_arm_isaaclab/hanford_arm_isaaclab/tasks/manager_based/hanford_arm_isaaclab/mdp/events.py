@@ -36,6 +36,7 @@ def reset_robot_from_3_spots(
     asset_cfg = SceneEntityCfg(asset_name)
     asset = env.scene[asset_cfg.name]
     origins = env.scene.env_origins[env_ids]
+    device = env_ids.device
     
     # pick random pose to reset to via index
     idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
@@ -49,6 +50,14 @@ def reset_robot_from_3_spots(
     
     asset.write_root_pose_to_sim(pose,env_ids=env_ids)
     asset.write_root_velocity_to_sim(vel,env_ids=env_ids)
+    
+    # set ptz joint pos/vel to zero
+    n = env_ids.numel()
+    n_ptz_joints = asset.num_joints  # 2
+    q_zero_ptz  = torch.zeros((n, n_ptz_joints), device=device)
+    
+    asset.set_joint_position_target(q_zero_ptz, env_ids=env_ids)
+    asset.write_data_to_sim()
     
 def reset_ptz_from_3_spots(
     env: ManagerBasedRLEnv,
@@ -73,13 +82,34 @@ def reset_ptz_from_3_spots(
     poses_w = poses_w.to(device=asset.device) # move poses to gpu
     
     default_root = asset.data.default_root_state[env_ids]
+
     pose = default_root[:, :7].clone()
     pose[:, 0:3] = poses_w[idx, 0:3] + origins + ptz_offset # keep per-env 
-    
     vel = torch.zeros((len(env_ids),6), device=asset.device) # don't move
+    
+    # i = 0
+    # print("\n--- BEFORE WRITE ---")
+    # print("env_id:", env_ids[i].item())
+    # print("default_root_ptz:", default_root[i].detach().cpu())
+    # print("pose_written_for_ptz:", pose[i].detach().cpu())
+    
+    # print("ptz.data.root_quat_w:", asset.data.root_quat_w[env_ids[i]].detach().cpu())
+    # print("ptz.data.joint_pos:", asset.data.joint_pos[env_ids[i]].detach().cpu())
+    # print("PTZ joint pos:", asset.data.joint_pos)
     
     asset.write_root_pose_to_sim(pose,env_ids=env_ids)
     asset.write_root_velocity_to_sim(vel,env_ids=env_ids)
+    
+    
+    # set ptz joint pos/vel to zero
+    n = env_ids.numel()
+    n_ptz_joints = asset.num_joints  # 2
+    q_zero_ptz  = torch.zeros((n, n_ptz_joints), device=device)
+    
+    asset.set_joint_position_target(q_zero_ptz, env_ids=env_ids)
+    asset.write_data_to_sim()
+    
+
     
 def reset_multi_from_3_spots(
     env: ManagerBasedRLEnv,
@@ -155,7 +185,34 @@ def reset_multi_from_3_spots(
     ptz.write_root_velocity_to_sim(vel,env_ids=env_ids)
     ptz.write_joint_state_to_sim(q_zero_ptz, qd_zero_ptz, env_ids=env_ids)
     
+def print_ptz_joints(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("ptz"),
+):
+    # define asset (ptz)
+    asset = env.scene[asset_cfg.name]
+    device = env_ids.device
+    
+    default_root = asset.data.default_root_state[env_ids]
+    i=0
+    
+    print("\n--- PRINT_PTZ_JOINTS_EVENT ---")
+    print("env_id:", env_ids[i].item())
+    print("default_root_ptz:", default_root[i].detach().cpu())
+    print('root velocity: ', asset.data.root_vel_w)
+    
+    print("ptz.data.root_quat_w:", asset.data.root_quat_w[env_ids[i]].detach().cpu())
+    print("ptz.data.joint_pos:", asset.data.joint_pos[env_ids[i]].detach().cpu())
+    
+    # if hasattr(asset, "_joint_pos_target_sim"):
+    #     print("joint_pos_target:", asset._joint_pos_target_sim[0].detach().cpu())
 
+    # if hasattr(asset, "_joint_vel_target_sim"):
+    #     print("joint_vel_target:", asset._joint_vel_target_sim[0].detach().cpu())
+
+    # if hasattr(asset, "_joint_effort_target_sim"):
+    #     print("joint_effort_target:", asset._joint_effort_target_sim[0].detach().cpu())
 
 def reset_joints_uniform_within_limits(
     env: ManagerBasedRLEnv,

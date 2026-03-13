@@ -129,6 +129,10 @@ PTZ_CFG = ArticulationCfg(
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
         ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False,
+            fix_root_link=True,
+        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
@@ -141,16 +145,16 @@ PTZ_CFG = ArticulationCfg(
         "ptz": ImplicitActuatorCfg(
             joint_names_expr=PTZ_JOINT_NAMES,
             stiffness={
-                "J1": 1000.0, # Pan
-                "J2": 1000.0, # Tilt
+                "J1": 0.9, # Pan
+                "J2": 13.0, # Tilt
                 },
             damping={
-                "J1": 100.0, # Pan
-                "J2": 100.0, # Tilt
+                "J1": .01, # Pan
+                "J2": 0.005, # Tilt
                 },
             effort_limit_sim={
-                "J1": 100.0, # Pan
-                "J2": 100.0, # Tilt
+                "J1": 10000.0, # Pan
+                "J2": 10000.0, # Tilt
                 },
         ),
     },
@@ -319,6 +323,36 @@ class EventCfg:
     #     },
     # )
     
+
+    # reset_ptz_joints = EventTerm(
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("ptz"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
+    
+    # print_ptz_joints = EventTerm(
+    #     func=mdp.print_ptz_joints,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("ptz")
+    #     }
+    # )
+    
+    # reset joints to zero state
+    # reset_robot_joints = EventTerm( # probably a more direct function than this one exists
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
+    
     reset_robot_roots = EventTerm(
         func=mdp.reset_robot_from_3_spots,
         mode="reset",
@@ -337,26 +371,8 @@ class EventCfg:
         },
     )
     
-    reset_ptz_joints = EventTerm(
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("ptz"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-    
-    # reset joints to zero state
-    reset_robot_joints = EventTerm( # probably a more direct function than this one exists
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+
+
 
 
 @configclass
