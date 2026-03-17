@@ -130,7 +130,7 @@ class WorldFrameUniformPoseCommand(UniformPoseCommand):
             #         )
             # valid = step_ok
             # valid = reachable & step_ok
-            valid = in_tank & reachable & step_ok
+            valid = in_tank & reachable # & step_ok
 
             # accept valid samples
             if valid.any():

@@ -50,24 +50,25 @@ def compute_ptz_action(ptz_pos_w, ee_pos_w, **kwargs):
     delta = ee_pos_w - ptz_pos_w
 
     # PTZ faces -Y in world frame, so pan=0 when EE is in -Y direction
-    pan = torch.atan2(-delta[:, 0], -delta[:, 1]) * 2.0
+    pan = torch.atan2(-delta[:, 0], -delta[:, 1])
 
     horiz_dist = torch.norm(delta[:, :2], dim=1)
     tilt = -torch.atan2(delta[:, 2], horiz_dist)
     tilt = torch.clamp(tilt, -50 * math.pi / 180.0, 230 * math.pi / 180.0)
     
-    # # DEBUG (-Y is forward):
-    delta_zero = torch.zeros_like(delta)
-    delta_zero[:, 1] = -0.5
-    # delta_zero[:, 1] = -0.7
+    # # DEBUG: EE 0.5 m in front of PTZ (PTZ forward = -Y in world)
+    # delta_zero = torch.zeros_like(delta)
+    # delta_zero[:, 0] = 0.7  # -Y forward
+    # delta_zero[:, 1] = -0.7  # -Y forward
     
-    pan = torch.atan2(-delta_zero[:, 0], -delta_zero[:, 1])
+    # pan = torch.atan2(-delta_zero[:, 0], -delta_zero[:, 1]) * 2.0
 
-    horiz_dist = torch.norm(delta_zero[:, :2], dim=1)
-    tilt = -torch.atan2(delta_zero[:, 2], horiz_dist)
-    tilt = torch.clamp(tilt, -50 * math.pi / 180.0, 230 * math.pi / 180.0)
+    # horiz_dist = torch.norm(delta_zero[:, :2], dim=1)
+    # tilt = -torch.atan2(delta_zero[:, 2], horiz_dist)
+    # tilt = torch.clamp(tilt, -50 * math.pi / 180.0, 230 * math.pi / 180.0)
 
     return torch.stack([pan, tilt], dim=1)
+
 
 def main():
     """Agent that sends pose commands from random sample inside tank.
@@ -87,12 +88,8 @@ def main():
     
     env.reset()
 
-    # print("PTZ root vel after reset:", ptz.data.root_vel_w)
-    # print("PTZ root pos after reset:", ptz.data.root_pos_w)
-    # print("PTZ default root state: ", ptz.data.default_root_state)
-
-    # simulate environment
-    ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
+    # create debug markers
+    # ee_marker, ptz_marker, arrow_marker, actual_arrow_marker = make_ptz_debug_visualizers(args_cli.device)
 
     ptz_body_ids, _ = ptz.find_bodies("Tilt_Link")
     ptz_body_idx = int(ptz_body_ids[0])
@@ -103,12 +100,6 @@ def main():
     device = ptz.device
     num_envs = env.unwrapped.num_envs
     env_ids = torch.arange(num_envs, device=device, dtype=torch.long)
-
-    # print("PTZ body names:", ptz.body_names)
-    # print("PTZ joint names: ", ptz.joint_names)
-    
-    # print("robot body names:", robot.body_names)
-    # print("robot joint names: ", robot.joint_names)
     
     while simulation_app.is_running():
         with torch.inference_mode():
@@ -122,18 +113,7 @@ def main():
             ptz_pos_w = ptz.data.body_pos_w[:, ptz_body_idx, :]
             ptz_root_quat_w = ptz.data.root_quat_w
             
-            # DEBUG print root pos
-            ptz_root_pos_w = ptz.data.root_pos_w
-            # print("PTZ root pos: ", ptz_root_pos_w)
-            # robot_root_pos_w = robot.data.root_pos_w
-            # print("robot root pos: ", robot_root_pos_w)
-            # for i, name in enumerate(ptz.body_names):
-            #     print(f"{name}: {ptz.data.body_pos_w[0, i, :]}")
-            # print('PTZ root velocity: ', ptz.data.root_vel_w)
-            
-            # get ee pos in world frame
-            ee_pos_w = robot.data.body_pos_w[:, ee_body_idx, :]
-            
+            # get ee pos in world frame 
             ptz_pos_w = ptz.data.body_pos_w[:, ptz_body_idx, :]   # (N,3)
             ee_pos_w  = robot.data.body_pos_w[:, ee_body_idx, :]  # (N,3)
             
@@ -142,50 +122,20 @@ def main():
                 ee_pos_w=ee_pos_w,
                 ptz_root_quat_w=ptz_root_quat_w,
                 )
+        
+            # # --- PTZ DIAGNOSTIC ---
+            # update_ptz_debug_vis(
+            #     ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
+            #     ee_pos_w=ee_pos_w,
+            #     ptz_pos_w=ptz_pos_w,
+            #     pan=ptz_action[:, 0],
+            #     tilt=ptz_action[:, 1],
+            #     ptz=ptz,
+            #     device=args_cli.device,
+            # )
             
-            # print("ptz root quat current: ", ptz.data.root_quat_w)
-            
-            # print("PTZ joint pos:", ptz.data.joint_pos)
-            # print("PTZ joint vel:", ptz.data.joint_vel)
-            # print("PTZ joint effort:", ptz.data.joint_efforts)
-            
-            # print("PTZ computed action: ", ptz_action)
-    
-            # ptz_action = torch.zeros_like(ptz_action)
-            
-            # --- PTZ DIAGNOSTIC ---
-            update_ptz_debug_vis(
-                ee_marker, ptz_marker, arrow_marker, actual_arrow_marker,
-                ee_pos_w=ee_pos_w,
-                ptz_pos_w=ptz_pos_w,
-                pan=ptz_action[:, 0],
-                tilt=ptz_action[:, 1],
-                ptz=ptz,
-                device=args_cli.device,
-            )
-            
-
-            # print("_joint_pos_target_sim:", ptz._joint_pos_target_sim)
-            # print("_joint_vel_target_sim:", ptz._joint_vel_target_sim)
- 
-            n_ptz_joints = 2
-            qd_zero_ptz = torch.zeros((num_envs, n_ptz_joints), device=device)
-            print("PTZ joint efforts:", ptz.data.applied_torque)
-            # write directly to articulation buffer (no MDP terms)
-            # ptz.write_joint_state_to_sim(ptz_action, qd_zero_ptz, env_ids=env_ids)
-            
-            # ptz.set_joint_position_target(ptz_action)
-            # ptz.write_data_to_sim()
-            
-            # step (applies arm command + physics + ptz action)
-            obs, rewards, terminated, truncated, info = env.step(arm_command)
-            # print("PTZ root vel after reset:", ptz.data.root_vel_w)
-            # print("PTZ root pos after reset:", ptz.data.root_pos_w)
-            # if terminated[0] or truncated[0]:
-            #     ptz = env.unwrapped.scene["ptz"]
-            #     print("\n--- AFTER EPISODE RESET ---")
-            #     print("ptz root_quat_w:", ptz.data.root_quat_w[0])
-            #     print("ptz joint_pos:", ptz.data.joint_pos[0])
+            ptz.set_joint_position_target(ptz_action)
+            env.step(arm_command)
             
 
     # close the simulator

@@ -23,6 +23,62 @@ POSITIONS = (
     (0.0, 0.0, 0.0)
 )
 
+def reset_robot_fixed(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    pose_w: torch.Tensor, # [7] (x,y,z,qw,qx,qy,qz)
+    asset_name: str = "robot",
+    ):
+    
+    """ Reset root to a fixed position """
+    
+    # define asset (robot)
+    asset_cfg = SceneEntityCfg(asset_name)
+    asset = env.scene[asset_cfg.name]
+    origins = env.scene.env_origins[env_ids]
+    device = env_ids.device
+    
+    # move poses to gpu
+    pose_w = pose_w.to(device=device) 
+    
+    # make pose and vel commands
+    default_root = asset.data.default_root_state[env_ids]
+    pose = default_root[:, :7].clone()
+    pose[:, 0:3] = pose_w[0:3] + origins # keep per-env 
+    vel = torch.zeros((len(env_ids),6), device=asset.device) # don't move
+    
+    asset.write_root_pose_to_sim(pose,env_ids=env_ids)
+    asset.write_root_velocity_to_sim(vel,env_ids=env_ids)
+       
+def reset_ptz_fixed(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    pose_w: torch.Tensor, # [7] (x,y,z,qw,qx,qy,qz)
+    asset_name: str = "ptz",
+    ):
+    
+    """ Reset root to a fixed position """
+    
+    # define asset (robot)
+    asset_cfg = SceneEntityCfg(asset_name)
+    asset = env.scene[asset_cfg.name]
+    origins = env.scene.env_origins[env_ids]
+    device = env_ids.device
+    # want ptz to be slightly higher
+    ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
+    
+    # move poses to gpu
+    pose_w = pose_w.to(device=device) 
+    
+    # make pose and vel commands
+    default_root = asset.data.default_root_state[env_ids]
+    pose = default_root[:, :7].clone()
+    pose[:, 0:3] = pose_w[0:3] + origins + ptz_offset # keep per-env 
+    vel = torch.zeros((len(env_ids),6), device=asset.device) # don't move
+    
+    asset.write_root_pose_to_sim(pose,env_ids=env_ids)
+    asset.write_root_velocity_to_sim(vel,env_ids=env_ids)
+
 def reset_robot_from_3_spots(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor,
@@ -109,8 +165,6 @@ def reset_ptz_from_3_spots(
     asset.set_joint_position_target(q_zero_ptz, env_ids=env_ids)
     asset.write_data_to_sim()
     
-
-    
 def reset_multi_from_3_spots(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor,
@@ -139,8 +193,6 @@ def reset_multi_from_3_spots(
     default_root_robot = robot.data.default_root_state[env_ids]  # [n, 13]
     default_root_ptz = ptz.data.default_root_state[env_ids]  # from PTZ_CFG, init_state: rot=(0, 0, 1, 0)
     
-    print("PTZ default root state: ", default_root_ptz)
-    
     # pick random pose to reset to
     idx_robot = torch.randint(0, 3, (n,), device=device)
     idx_ptx = torch.randint(0, 2, (n,), device=device) # note only picks 0 or 1
@@ -154,36 +206,16 @@ def reset_multi_from_3_spots(
     # keep per-env origin behavior (aka taking relative pos to global)
     pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3] # get env origin + [x,y,z] from desired poses
     pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] + ptz_offset
-    # potential problem: i only replace 0:3 and 3:7 are left as whatever the was cached for default.........
-    
+
     # zero velocity
     vel = torch.zeros(n,6, device=device) # is this the right shape?
-    
-    # set robot joint pos/vel to zero
-    n_robot_joints = robot.num_joints  # 7 i think i forgot 
-    q_zero_robot  = torch.zeros((n, n_robot_joints), device=device)
-    qd_zero_robot = torch.zeros((n, n_robot_joints), device=device)
-    
-    # set ptz joint pos/vel to zero
-    n_ptz_joints = ptz.num_joints  # 2
-    q_zero_ptz  = torch.zeros((n, n_ptz_joints), device=device)
-    qd_zero_ptz = torch.zeros((n, n_ptz_joints), device=device)
-    
-    # set TARGETS to zero so it doesn't generate corrective torque (reset actuators)
-    # robot.set_joint_position_target(q_zero_robot, env_ids=env_ids) 
-    # robot.write_data_to_sim() # send target buffer ^^^ to sim
-    
-    ptz.set_joint_position_target(q_zero_ptz, env_ids=env_ids)
-    ptz.write_data_to_sim()
     
     # write states to sim
     robot.write_root_pose_to_sim(pose_robot,env_ids=env_ids)
     robot.write_root_velocity_to_sim(vel,env_ids=env_ids)
-    # robot.write_joint_state_to_sim(q_zero_robot, qd_zero_robot, env_ids=env_ids)
 
     ptz.write_root_pose_to_sim(pose_ptz,env_ids=env_ids)
     ptz.write_root_velocity_to_sim(vel,env_ids=env_ids)
-    ptz.write_joint_state_to_sim(q_zero_ptz, qd_zero_ptz, env_ids=env_ids)
     
 def print_ptz_joints(
     env: ManagerBasedRLEnv,
@@ -241,3 +273,89 @@ def reset_joints_uniform_within_limits(
     # go sim
     asset.write_joint_state_to_sim(q, qd, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)    
     
+    
+    
+# unused event declarations
+# @configclass
+# class EventCfg:
+#     """Reset joints to a random fraction of their limit range.
+    
+#     Also respawn the root from one of 3 locations.
+    
+#     FOR ML: resets in same spot each time
+#     """
+    
+#     reset_robot_fixed = EventTerm(
+#         func=mdp.reset_robot_fixed,
+#         mode="reset",
+#         params={
+#             "asset_name": "robot",
+#             "pose": POSES_W[1, :],
+#         },
+#     )
+    
+#     reset_ptz_fixed = EventTerm(
+#         func=mdp.reset_ptz_fixed,
+#         mode="reset",
+#         params={
+#             "asset_name": "ptz",
+#             "pose": POSES_W[2, :],
+#         },
+#     )
+    
+#     # reset joint configuration in random config
+#     # reset_roots = EventTerm(
+#     #     func=mdp.reset_multi_from_3_spots,
+#     #     mode="reset",
+#     #     params={
+#     #         "poses_w": POSES_W,
+#     #     },
+#     # )
+    
+
+#     # reset_ptz_joints = EventTerm(
+#     #     func=base_mdp.reset_joints_by_offset,
+#     #     mode="reset",
+#     #     params={
+#     #         "asset_cfg": SceneEntityCfg("ptz"),
+#     #         "position_range": (0.0, 0.0),
+#     #         "velocity_range": (0.0, 0.0),
+#     #     },
+#     # )
+    
+#     # print_ptz_joints = EventTerm(
+#     #     func=mdp.print_ptz_joints,
+#     #     mode="reset",
+#     #     params={
+#     #         "asset_cfg": SceneEntityCfg("ptz")
+#     #     }
+#     # )
+    
+#     # reset joints to zero state
+#     # reset_robot_joints = EventTerm( # probably a more direct function than this one exists
+#     #     func=base_mdp.reset_joints_by_offset,
+#     #     mode="reset",
+#     #     params={
+#     #         "asset_cfg": SceneEntityCfg("robot"),
+#     #         "position_range": (0.0, 0.0),
+#     #         "velocity_range": (0.0, 0.0),
+#     #     },
+#     # )
+    
+#     # reset_robot_roots = EventTerm(
+#     #     func=mdp.reset_robot_from_3_spots,
+#     #     mode="reset",
+#     #     params={
+#     #         "asset_name": "robot",
+#     #         "poses_w": POSES_W,
+#     #     },
+#     # )
+    
+#     # reset_ptz_roots = EventTerm(
+#     #     func=mdp.reset_ptz_from_3_spots,
+#     #     mode="reset",
+#     #     params={
+#     #         "asset_name": "ptz",
+#     #         "poses_w": POSES_W,
+#     #     },
+#     # )
