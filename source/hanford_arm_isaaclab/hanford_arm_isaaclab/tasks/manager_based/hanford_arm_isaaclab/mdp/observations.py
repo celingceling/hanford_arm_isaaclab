@@ -50,21 +50,68 @@ def object_obs(
     )
 
 
-def get_eef_pos(env: ManagerBasedRLEnv, link_name: str) -> torch.Tensor:
-    body_pos_w = env.scene["robot"].data.body_pos_w
-    left_eef_idx = env.scene["robot"].data.body_names.index(link_name)
-    left_eef_pos = body_pos_w[:, left_eef_idx] - env.scene.env_origins
+def get_ee_pose_world(env: ManagerBasedRLEnv, body_name: str = "end_effector") -> torch.Tensor:
+    """
+    Returns [num_envs, 7] EE pose in world frame: [x, y, z, qw, qx, qy, qz].
+    Used directly in obs and as input to mark_from_depth() when ZED integrated.
+    """
+    # why the hell is it in world frame
+    
+    robot    = env.scene["robot"]
+    idx      = robot.data.body_names.index(body_name)
+    pos      = robot.data.body_pos_w[:, idx, :]    # [num_envs, 3]
+    quat     = robot.data.body_quat_w[:, idx, :]   # [num_envs, 4]
+    return torch.cat([pos, quat], dim=-1)           # [num_envs, 7]
 
-    return left_eef_pos
+
+def get_ptz_state(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """
+    Returns [num_envs, 2] PTZ joint positions: [pan (J1), tilt (J2)].
+    Interface frozen now — PTZ enters RL decision loop in a later iteration.
+    """
+    
+    return env.scene["ptz"].data.joint_pos[:, :2]   # [num_envs, 2]
 
 
+def slam_state_placeholder(env: ManagerBasedRLEnv, state_dim: int = 64) -> torch.Tensor:
+    """
+    STUB — returns zeros until RTAB-Map.
+
+    state_dim must be agreed before training starts — changing it invalidates checkpoints. # i have no idea what this means
+
+    When implemented, expected content:
+        - Occupancy map summary or frontier encoding
+        - Localization confidence scalar
+        - Unexplored volume estimate
+    """
+    return torch.zeros((env.num_envs, state_dim), device=env.device, dtype=torch.float32)
+
+def get_coverage_grid(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """
+    READ ONLY — returns [num_envs, 1000] flat coverage grid tensor.
+
+    IMPORTANT: do NOT call mark() here.
+    Isaac Lab step order: terminations → rewards → observations.
+    Reward (coverage_gain_placeholder) runs first and calls mark().
+    By the time this obs term runs, the grid is already updated.
+
+    ZED handoff: mark_from_depth() is called in coverage_gain_placeholder()
+    in rewards.py
+    """
+    
+    if not hasattr(env, "coverage_grid") or env.coverage_grid is None:
+        return torch.zeros((env.num_envs, 1000), device=env.device, dtype=torch.float32)
+    
+    return env.coverage_grid.as_tensor()
+
+
+# UNUSED FUNCTIONS FROM OLD TESTS
 def get_eef_quat(env: ManagerBasedRLEnv, link_name: str) -> torch.Tensor:
     body_quat_w = env.scene["robot"].data.body_quat_w
     left_eef_idx = env.scene["robot"].data.body_names.index(link_name)
     left_eef_quat = body_quat_w[:, left_eef_idx]
 
     return left_eef_quat
-
 
 def get_robot_joint_state(
     env: ManagerBasedRLEnv,
@@ -76,7 +123,6 @@ def get_robot_joint_state(
     robot_joint_states = env.scene["robot"].data.joint_pos[:, indexes]
 
     return robot_joint_states
-
 
 def get_all_robot_link_state(
     env: ManagerBasedRLEnv,

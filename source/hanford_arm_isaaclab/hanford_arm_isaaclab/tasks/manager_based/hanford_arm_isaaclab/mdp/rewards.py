@@ -45,8 +45,7 @@ def collision_reward(
     else:
         env_ids = env_ids.to(device=env.device, dtype=torch.long)
 
-    asset_cfg = SceneEntityCfg(asset_name)
-    asset = env.scene[asset_cfg.name]
+    asset = env.scene[SceneEntityCfg(asset_name).name]
 
     if not hasattr(asset, "data") or not hasattr(asset.data, "net_contact_forces_w"):
         # return per-env scalar reward, shape [N]
@@ -62,3 +61,48 @@ def collision_reward(
     
     # ensure dtype float32
     return penalties.to(dtype=torch.float32)
+
+
+def coverage_gain_placeholder(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """
+    Calls grid.mark() and returns [num_envs] float: 1.0 if new cell, else 0.0.
+    (marks current EE cell)
+
+    IMPORTANT: mark() is called here, not in observations.
+    Isaac Lab step order: terminations → rewards → observations.
+    Rewards run before observations — this is the correct place to update grid state.
+
+    ZED handoff: replace the mark() call with mark_from_depth(depth, cam_pose, intrinsics).
+    Everything else (return value, tensor shape, RewTerm wiring) stays the same.
+    """
+    
+    if not hasattr(env, "coverage_grid"):
+        return torch.zeros(env.num_envs, device=env.device, dtype=torch.float32)
+
+    robot    = env.scene["robot"]
+    body_idx = robot.data.body_names.index("end_effector")
+    ee_pos_w = robot.data.body_pos_w[:, body_idx, :]   # [num_envs, 3] world frame
+
+    # ── ZED handoff point ────────────────────────────────────────────────
+    # NOW:   new_cells = env.coverage_grid.mark(ee_pos_w)
+    # LATER: new_cells = env.coverage_grid.mark_from_depth(depth, cam_pose, intrinsics)
+    new_cells = env.coverage_grid.mark(ee_pos_w)       # [num_envs] bool
+    # ─────────────────────────────────────────────────────────────────────
+
+    return new_cells.float()
+
+def stagnation_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """
+    Returns [num_envs] +1.0 when no new cell was found this step.
+    RewTerm weight is negative (-0.5) → net effect is a penalty.
+
+    Reads _last_new_cells set by coverage_gain_placeholder() — reward order matters.
+    coverage_gain_placeholder must appear before stagnation in RewardsCfg.
+    """
+    if not hasattr(env, "coverage_grid") or \
+       not hasattr(env.coverage_grid, "_last_new_cells"):
+        return torch.zeros(env.num_envs, device=env.device, dtype=torch.float32)
+    
+    return (~env.coverage_grid._last_new_cells).float()   # +1.0 when stagnant
+
+

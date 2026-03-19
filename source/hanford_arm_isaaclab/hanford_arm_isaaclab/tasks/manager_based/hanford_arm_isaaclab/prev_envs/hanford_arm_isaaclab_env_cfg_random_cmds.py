@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """ 
-python scripts/skrl/train.py --task=Hanford-Arm-Isaaclab-v1 --num_envs=1 --headless
+python scripts\skrl\train.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=1 --headless
 
 NOTE: this is modeled after reach_env_cfg.py from isaaclab_tasks
 
@@ -16,7 +16,7 @@ import isaaclab.envs.mdp as base_mdp
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.controllers import DifferentialIKControllerCfg
-from isaaclab.envs import ManagerBasedRLEnvCfg, ManagerBasedRLEnv
+from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.envs.mdp.actions import DifferentialInverseKinematicsActionCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -32,8 +32,6 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 import isaacsim.core.prims as prims
 
 from . import mdp
-from .mdp.commands import TANK_LOCAL_MIN, TANK_LOCAL_MAX
-from .include.coverage_grid import CoverageGrid
 
 ##
 # Global Variables
@@ -53,8 +51,16 @@ JOINT_NAMES=[ # list of joint names that the action will be mapped to
 PTZ_JOINT_NAMES=["J1", "J2"]
 
 EE_LIGHT_PRIM = "/World/envs/env_0/Robot/pulley_drive/SphereLight"
+
+# ALL_JOINT_NAMES = JOINT_NAMES + [ 
+#                    "yaw_mount_to_base", "camera_link_to_zed_x_mini",
+#                    "zed_base_to_left", "zed_base_to_right", "zed_left_to_optical", 
+#                    "zed_base_to_imu", "zed_right_to_optical", 
+#                    "camera_link_to_pulley"
+#                    ]
     
-# reset root positions
+# reset arm position randomly
+# making these private (adding _) because otherwise it thinks it's an event term 
 POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
     [-0.554,  0.01,   2.0, 1.0, 0.0, 0.0, 0.0],
     [ 1.012,  0.414,  2.0, 1.0, 0.0, 0.0, 0.0],
@@ -77,12 +83,12 @@ ARM_CFG = ArticulationCfg(
         )
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        joint_pos={"insert_into_pipe": 1.5, # start with arm at top
+        joint_pos={"insert_into_pipe": 0.0, 
                    "rotate_in_pipe": 0.0, 
                     "joint_1": 0.0, 
                     "joint_2": 0.0, 
                     "joint_3_pulley_spin": 0.0,
-                    "end_effector_joint": 0.0,},
+                    "end_effector_joint": 0.0,}, # fill with zeros
     ),
     actuators={ # joint names and properties taken from the usd in USD_PATH,ignore root joint bc don't intend to command
         "arm": ImplicitActuatorCfg(
@@ -176,9 +182,15 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
             ),
     )
 
-    # assets
-    robot: ArticulationCfg = ARM_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    ptz: ArticulationCfg = PTZ_CFG.replace(prim_path="{ENV_REGEX_NS}/PTZ")
+    # robot
+    robot: ArticulationCfg = ARM_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+        ) # squiggly but same as example usagef
+    
+    # ptz
+    ptz: ArticulationCfg = PTZ_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/PTZ",
+    )
     
     # tank
     tank_cfg: AssetBaseCfg = AssetBaseCfg(
@@ -200,24 +212,34 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
 @configclass
 class CommandsCfg:
     """
-    INTENTIONALLY EMPTY.
-    ManagerBasedRLEnv unconditionally constructs CommandManager — do not delete this class.
-    Coverage policy is not goal-conditioned; no command terms needed.
-    
-    ^^ at least according to claude but i don't think it hurts
-    
+        Command terms for the MDP.
+        Randomly samples EE target poses
     """
-    pass
-
+    
+    ee_pose = mdp.WorldFrameUniformPoseCommandCfg(
+        asset_name="robot",
+        body_name="end_effector",
+        resampling_time_range=(0.75, 0.75),
+        debug_vis=False,
+        ranges=mdp.WorldFrameUniformPoseCommandCfg.Ranges(
+            pos_x=(-1.782, 2.393),   # world frame tank bounds with 0.3 margin
+            pos_y=(-1.387, 1.036),
+            pos_z=(0.381, 1.882),    # tank z in world (0.7 base + extent)
+            roll=(0.0, 0.0),
+            pitch=(0.0, 0.0),
+            yaw=(0.0, 0.0),
+        ),
+    )
+    
 
 
 @configclass
 class ActionsCfg:
     """
     Action specifications for the MDP.
+    Use differential IK to solve joint positions.
     
-    Policy outputs EE pose delta. Use Differential IK to solve for necessary joint positions.
-    Can change IK method later but this is just easy rn
+    The action is the pose command.
     
     """
     
@@ -227,10 +249,10 @@ class ActionsCfg:
         body_name="end_effector",
         controller=DifferentialIKControllerCfg(
             command_type="pose",        # input is [x,y,z,qw,qx,qy,qz]
-            use_relative_mode=True,     # want EE delta
+            use_relative_mode=False,    # absolute targets, not deltas
             ik_method="dls",            # damped least squares - handles singularities
         ),
-        scale=0.1, # step size
+        scale=1.0,
         body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(
             pos=(0.0, 0.0, 0.0),
         ),
@@ -246,65 +268,50 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Policy observations.
         
-        Dimensions (concatenated):
-            joint_pos          : [num_envs, 6]
-            joint_vel          : [num_envs, 6]
-            actions            : [num_envs, 7]   (EE delta pose)
-            arm_collision_flag : [num_envs, 2]
-            ee_pose_world      : [num_envs, 7]   (xyz + wxyz)
-            ptz_state          : [num_envs, 2]   (pan, tilt)
-            slam_state         : [num_envs, 64]  (zeros until SLAM integrated)
-            coverage_grid      : [num_envs, 1000]
-            ──────────────────────────────────────
-            Total              : [num_envs, 1095]
-            
+        joint_pos_rel: joint positions relative to their default (zero) positions.
+                       Better than absolute because it's invariant to init state.
+        joint_vel_rel: joint velocities. Helps policy damp oscillations.
+        pose_command:  the target EE pose [x,y,z,qw,qx,qy,qz]. 
+                       Critical - policy must see its goal.
+        actions:       last action taken. Helps policy be temporally consistent.
         """
 
-        # Robot state
-        joint_pos          = ObsTerm(func=base_mdp.joint_pos_rel,
-                                     noise=Unoise(n_min=-0.01, n_max=0.01))
-        joint_vel          = ObsTerm(func=base_mdp.joint_vel_rel,
-                                     noise=Unoise(n_min=-0.01, n_max=0.01))
-        actions            = ObsTerm(func=base_mdp.last_action)
-        arm_collision_flag = ObsTerm(func=mdp.collision_observation,
-                                     params={"asset_name": "robot"})
-
-        # EE world pose — needed for dense reward shaping and future ZED work
-        ee_pose_world = ObsTerm(func=mdp.get_ee_pose_world,
-                                params={"body_name": "end_effector"})
-
-        # PTZ state — interface frozen now; used when PTZ enters decision loop
-        ptz_state = ObsTerm(func=mdp.get_ptz_state)
-
-        # SLAM state placeholder — zeros until RTAB-Map integrated
-        # i do not know what state_dim means
-        slam_state = ObsTerm(func=mdp.slam_state_placeholder,
-                             params={"state_dim": 64})
-
-        # Coverage grid — READ ONLY here.
-        # mark() is called in coverage_gain_placeholder() (reward side).
-        # Isaac Lab step order: terminations → rewards → observations.
-        # Reward runs before obs — grid is already updated when this reads it.
-        coverage_grid = ObsTerm(func=mdp.get_coverage_grid)
-
-        # REMOVED: pose_command — env is no longer goal-conditioned
-        # pose_command = ObsTerm(func=base_mdp.generated_commands, ...)
-
+        joint_pos = ObsTerm(
+            func=base_mdp.joint_pos_rel,
+            noise=Unoise(n_min=-0.01, n_max=0.01),  # small sensor noise
+        )
+        joint_vel = ObsTerm(
+            func=base_mdp.joint_vel_rel,
+            noise=Unoise(n_min=-0.01, n_max=0.01),
+        )
+        pose_command = ObsTerm(
+            func=base_mdp.generated_commands,
+            params={"command_name": "ee_pose"},
+        )
+        actions = ObsTerm(func=base_mdp.last_action)
+        
+        arm_collision_flag = ObsTerm(
+            func=mdp.collision_observation,
+            params={"asset_name": "robot"}
+        )
+        
+        
         def __post_init__(self):
-            self.enable_corruption  = False
-            self.concatenate_terms  = True
+            self.enable_corruption = False # i think this adds some noise during training, set as false for now
+            self.concatenate_terms = True
 
+    # observation groups
     policy: PolicyCfg = PolicyCfg()
 
 
 @configclass
 class EventCfg:
-    """
-    Events that happen upon reset.
+    """Reset joints to a random fraction of their limit range.
     
-    """
+    Also respawn the root from one of 3 locations.
     
-    # reset PTZ and robot roots randomly in one of the 3 ports
+    FOR ML: resets in same spot each time
+    """
     reset_roots = EventTerm(
         func=mdp.reset_multi_from_3_spots,
         mode="reset",
@@ -313,9 +320,26 @@ class EventCfg:
             "asset_names": ["robot","ptz"],
         },
     )
+    # reset_robot_fixed = EventTerm(
+    #     func=mdp.reset_robot_fixed,
+    #     mode="reset",
+    #     params={
+    #         "asset_name": "robot",
+    #         "pose_w": POSES_W[0, :],
+    #     },
+    # )
+    
+    # reset_ptz_fixed = EventTerm(
+    #     func=mdp.reset_ptz_fixed,
+    #     mode="reset",
+    #     params={
+    #         "asset_name": "ptz",
+    #         "pose_w": POSES_W[2, :],
+    #     },
+    # )
     
     # reset joints to zero state
-    reset_robot_joints = EventTerm( # probably a more direct function than this one exists idk but it works and is isaaclab native
+    reset_robot_joints = EventTerm( # probably a more direct function than this one exists
         func=base_mdp.reset_joints_by_offset,
         mode="reset",
         params={
@@ -335,81 +359,109 @@ class EventCfg:
         },
     )
     
-    # Clear coverage grid and no-progress history each episode
-    reset_coverage_buffer = EventTerm(
-        func=mdp.reset_coverage_buffer,
-        mode="reset",
-    )
 
 @configclass
 class RewardsCfg:
-    """
-    Reward terms for the MDP.
-    
-    Removed alive and terminating rewards to encourage safe idling.
-    
-    """
+    """Reward terms for the MDP.""" # ignore for now
 
-    # reward new grid cell discovery, also marks the cell
-    coverage_gain = RewTerm(
-        func=mdp.coverage_gain_placeholder,
-        weight = 2.0,
-    )
+    # Constant running reward
+    alive = RewTerm(
+        func=base_mdp.is_alive, 
+        weight=1.0
+        )
     
-    # smoothness penalties
-    action_rate = RewTerm(
-        func=base_mdp.action_rate_l2,
-        weight = -0.005,
-    )
-    joint_vel = RewTerm(
-        func=base_mdp.joint_vel_l2, 
-        weight=-0.001,
-        params={
-            "asset_cfg": SceneEntityCfg("robot")
-        }
-    )
+    # Failure penalty
+    terminating = RewTerm(
+        func=base_mdp.is_terminated, 
+        weight=-2.0
+        )
     
     # Collisions
     arm_collision = RewTerm(
         func=mdp.collision_reward, 
-        weight = 1.0, # positive bc collision_reward() already returns negative
+        weight=-1.0,
         params={"asset_name": "robot"}
-    )
+        )
     
-    # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
-    stagnation = RewTerm(
-        func=mdp.stagnation_penalty,
-        weight = -0.5,
-    )
+    
 
+# Claude's RewardsCfg, figure out later
+# class RewardsCfg:
+#     """Three-part reward: coarse position, fine position, orientation.
+#     Penalties on action rate and joint velocity encourage smooth motion.
+    
+#     Negative weights = penalty (we want small error).
+#     Positive weights = bonus (we want this to be large).
+#     """
+
+#     # Penalize distance to target position (linear, always active)
+#     end_effector_position_tracking = RewTerm(
+#         func=mdp.position_command_error,
+#         weight=-0.2,
+#         params={
+#             "asset_cfg": SceneEntityCfg("robot", body_names="end_effector"),
+#             "command_name": "ee_pose",
+#         },
+#     )
+#     # Bonus when very close to target (tanh gives strong signal near goal)
+#     end_effector_position_tracking_fine_grained = RewTerm(
+#         func=mdp.position_command_error_tanh,
+#         weight=0.1,
+#         params={
+#             "asset_cfg": SceneEntityCfg("robot", body_names="end_effector"),
+#             "std": 0.1,
+#             "command_name": "ee_pose",
+#         },
+#     )
+#     # Penalize orientation error
+#     end_effector_orientation_tracking = RewTerm(
+#         func=mdp.orientation_command_error,
+#         weight=-0.1,
+#         params={
+#             "asset_cfg": SceneEntityCfg("robot", body_names="end_effector"),
+#             "command_name": "ee_pose",
+#         },
+#     )
+
+#     # Penalize large action changes between steps (encourages smooth motion)
+#     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.0001)
+
+#     # Penalize high joint velocities (encourages smooth motion)
+#     joint_vel = RewTerm(
+#         func=mdp.joint_vel_l2,
+#         weight=-0.0001,
+#         params={"asset_cfg": SceneEntityCfg("robot")},
+#     )
 
 @configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
 
     # (1) Time out
-    time_out = DoneTerm(
-        func=base_mdp.time_out, 
-        time_out=True
-    )
+    time_out = DoneTerm(func=base_mdp.time_out, time_out=True)
     
     # (2) Collision
-    collided = DoneTerm(
-        func=mdp.check_collision, 
-        time_out=False
-    )
+    collided = DoneTerm(func=mdp.check_collision, time_out=True)
+
+
+# reach gradually increases action rate and joint velocity penalty weights over num_steps. 
+# first learns to reach, then learns to move smoothly... idk
+# @configclass
+# class CurriculumCfg:
+#     """Start with weak smoothness penalties so the policy first learns to reach,
+#     then ramp them up so it learns to move smoothly.
     
-    # (3) No progress
-    no_progress = DoneTerm(
-        func=mdp.no_progress_termination,
-        params={
-            "min_coverage_gain": 0.005,
-            "window_steps": 100,
-        },
-        time_out=False,
-    )
+#     num_steps=4500 means the weight reaches its final value after 4500 env steps.
+#     """
 
-
+#     action_rate = CurrTerm(
+#         func=mdp.modify_reward_weight,
+#         params={"term_name": "action_rate", "weight": -0.005, "num_steps": 4500},
+#     )
+#     joint_vel = CurrTerm(
+#         func=mdp.modify_reward_weight,
+#         params={"term_name": "joint_vel", "weight": -0.001, "num_steps": 4500},
+#     )
 
 ##
 # Environment configuration
@@ -419,39 +471,28 @@ class TerminationsCfg:
 @configclass
 class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
-    scene: HanfordArmIsaaclabSceneCfg = HanfordArmIsaaclabSceneCfg(num_envs=16, env_spacing=6.0)
-    
+    scene: HanfordArmIsaaclabSceneCfg = HanfordArmIsaaclabSceneCfg(
+        num_envs=16, 
+        env_spacing=6.0
+        )
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     events: EventCfg = EventCfg()
     commands: CommandsCfg = CommandsCfg()
-    
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
+    # add curriculum later
 
     # Post initialization
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 12.0
+        self.episode_length_s = 7.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
-        
-
-class HanfordArmCoverageEnv(ManagerBasedRLEnv):
-    def __init__(self, cfg: HanfordArmIsaaclabEnvCfg, **kwargs):
-        
-        self.coverage_grid = CoverageGrid(
-            bounds=(TANK_LOCAL_MIN, TANK_LOCAL_MAX),
-            resolution=10,
-            num_envs=cfg.scene.num_envs,
-            device=self.device,
-        )
-        self.slam_bridge = None
-        super().__init__(cfg, **kwargs)
