@@ -3,7 +3,11 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to run an environment with zero action agent."""
+"""Script to run an environment with zero action agent.
+
+Usage: python scripts/tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=16
+
+"""
 
 """Launch Isaac Sim Simulator first."""
 

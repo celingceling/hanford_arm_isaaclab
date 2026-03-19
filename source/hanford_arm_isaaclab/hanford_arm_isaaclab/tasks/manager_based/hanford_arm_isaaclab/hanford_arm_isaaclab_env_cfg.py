@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """ 
-Usage: python scripts/tank_roi_agent.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=16
+python scripts\skrl\train.py --task=Template-Hanford-Arm-Isaaclab-v0 --num_envs=1 --headless
 
 NOTE: this is modeled after reach_env_cfg.py from isaaclab_tasks
 
@@ -61,11 +61,11 @@ EE_LIGHT_PRIM = "/World/envs/env_0/Robot/pulley_drive/SphereLight"
     
 # reset arm position randomly
 # making these private (adding _) because otherwise it thinks it's an event term 
-POSES_W = torch.zeros((3, 7), dtype=torch.float32)  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
-POSES_W[0, 0:3] = torch.tensor([-0.554, 0.01, 2.0], dtype=torch.float32)
-POSES_W[1, 0:3] = torch.tensor([1.012, 0.414, 2.0], dtype=torch.float32)
-POSES_W[2, 0:3] = torch.tensor([1.678, -0.976, 2.0], dtype=torch.float32)
-# POSES_W[:, 3] = 1.0  # no rotations, qw = 1, qx=qy=qz=0
+POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
+    [-0.554,  0.01,   2.0, 1.0, 0.0, 0.0, 0.0],
+    [ 1.012,  0.414,  2.0, 1.0, 0.0, 0.0, 0.0],
+    [ 1.678, -0.976,  2.0, 1.0, 0.0, 0.0, 0.0],
+]
 
 CONTACT_BUFFER = 0.3
 

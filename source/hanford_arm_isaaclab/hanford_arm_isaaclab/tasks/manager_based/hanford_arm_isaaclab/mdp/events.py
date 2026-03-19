@@ -17,12 +17,6 @@ from isaaclab.utils.math import wrap_to_pi
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
-POSITIONS = (
-    (0.0, 0.0, 0.0),
-    (0.0, 0.0, 0.0),
-    (0.0, 0.0, 0.0)
-)
-
 def reset_robot_fixed(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor,
@@ -39,7 +33,7 @@ def reset_robot_fixed(
     device = env_ids.device
     
     # move poses to gpu
-    pose_w = pose_w.to(device=device) 
+    pose_w = torch.as_tensor(pose_w, device=device, dtype=torch.float32)
     
     # make pose and vel commands
     default_root = asset.data.default_root_state[env_ids]
@@ -68,7 +62,7 @@ def reset_ptz_fixed(
     ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
     
     # move poses to gpu
-    pose_w = pose_w.to(device=device) 
+    pose_w = torch.as_tensor(pose_w, device=device, dtype=torch.float32)
     
     # make pose and vel commands
     default_root = asset.data.default_root_state[env_ids]
@@ -96,7 +90,7 @@ def reset_robot_from_3_spots(
     
     # pick random pose to reset to via index
     idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
-    poses_w = poses_w.to(device=asset.device) # move poses to gpu
+    poses_w = torch.as_tensor(poses_w, device=device, dtype=torch.float32) # move poses to gpu
     
     default_root = asset.data.default_root_state[env_ids]
     pose = default_root[:, :7].clone()
@@ -135,7 +129,7 @@ def reset_ptz_from_3_spots(
     
     # pick random pose to reset to via index
     idx = torch.randint(0, 3, (len(env_ids),), device=asset.device)
-    poses_w = poses_w.to(device=asset.device) # move poses to gpu
+    poses_w = torch.as_tensor(poses_w, device=device, dtype=torch.float32) # move poses to gpu
     
     default_root = asset.data.default_root_state[env_ids]
 
@@ -177,7 +171,7 @@ def reset_multi_from_3_spots(
     # put poses on correct device (gpu)
     device = env_ids.device
     env_ids = env_ids.to(device=device, dtype=torch.long)
-    poses_w = poses_w.to(device=device, dtype=torch.float32)
+    poses_w = torch.as_tensor(poses_w, device=device, dtype=torch.float32)
     
     n = env_ids.numel()
     origins = env.scene.env_origins[env_ids]  # [n,3]
