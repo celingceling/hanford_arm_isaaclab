@@ -28,6 +28,7 @@ from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.sensors import RayCasterCfg, patterns
 
 import isaacsim.core.prims as prims
 
@@ -62,6 +63,8 @@ POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
 ]
 
 CONTACT_BUFFER = 0.3
+LIDAR_MAX_DIST = 5.0  # metres — single source of truth for sensor + reward filter
+
 
 ##
 # Configuration
@@ -191,7 +194,23 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
             pos=(0.0,0.0,0.7),
         ),
     )
-
+    
+    # lidar -- mount at same link as ZED 
+    # not really sure what most of the properties do exactly but this seems like a reasonable range :D
+    lidar: RayCasterCfg = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot",
+        attach_prim_path="{ENV_REGEX_NS}/Robot/pulley_drive/camera_link",
+        pattern_cfg=patterns.LidarPatternCfg(
+            channels=32,           # vertical beams 
+            vertical_fov_range=(-30.0, 30.0),   # degrees, ±30 gives good tank coverage
+            horizontal_fov_range=(-180.0, 180.0),
+            horizontal_res=2.0,    # degrees between horizontal beams
+            # 32 channels × (360/2) = 32 × 180 = 5760 pts/scan — filter to ~2000 in rewards
+        ),
+        max_distance=LIDAR_MAX_DIST,          # meters — tank is ~3m across, 5m gives margin
+        drift_range=(-0.0, 0.0),   # no artificial drift for now
+        debug_vis=False,
+    )
 
 ##
 # MDP settings

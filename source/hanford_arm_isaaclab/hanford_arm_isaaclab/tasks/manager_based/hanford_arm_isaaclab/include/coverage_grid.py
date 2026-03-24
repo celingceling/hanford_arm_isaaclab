@@ -3,11 +3,6 @@ import torch
 class CoverageGrid:
     """
     Vectorized 3D coverage grid over the arm task space.
-    Populated by EE position now; replaced by ZED depth unprojection later.
-
-    ZED handoff:
-        Replace mark() calls in rewards.py with mark_from_depth().
-        Tensor contract ([num_envs, res^3] float32) is identical.
 
     Frame convention:
         All positions must be in WORLD frame.
@@ -30,24 +25,26 @@ class CoverageGrid:
         )
         # Written by reward, read by stagnation penalty and obs
         self._last_new_cells = torch.zeros(num_envs, dtype=torch.bool, device=device)
+        self._last_new_count = torch.zeros(num_envs, dtype=torch.float32, device=device)
 
     def reset(self, env_ids: torch.Tensor):
-        """Clear grid for terminated envs. Called by reset_coverage_buffer event."""
-        
         self.grid[env_ids]            = False
         self._last_new_cells[env_ids] = False
+        self._last_new_count[env_ids] = 0.0
 
     def pos_to_idx(self, pos: torch.Tensor) -> torch.Tensor:
         """[N, 3] world pos → [N, 3] grid indices, clamped to valid range."""
         
+        # clamp point cloud poses to tank bounds
         normed = (pos - self.bounds_min) / (self.bounds_max - self.bounds_min)
         
+        # convert positions to voxel grid indices
         return (normed * self.res).long().clamp(0, self.res - 1)
 
     def mark(self, ee_pos_w: torch.Tensor) -> torch.Tensor:
         """
-        Mark cells visited by EE world position.
-        Called in coverage_gain_placeholder() (reward side — runs before obs).
+        ** NO LONGER USED BC USING LIDAR DATA NOW **
+        Mark cells visited by EE world position. 
 
         Args:
             ee_pos_w: [num_envs, 3] EE positions in world frame
@@ -55,12 +52,13 @@ class CoverageGrid:
             new_cells: [num_envs] bool — True if a new cell was marked this step
         """
         
+        # get grid indicies from pos
         idx     = self.pos_to_idx(ee_pos_w)           # [num_envs, 3]
         env_ids = torch.arange(self.num_envs, device=self.device)
-        xi, yi, zi = idx[:, 0], idx[:, 1], idx[:, 2]
-        was_visited              = self.grid[env_ids, xi, yi, zi]
-        self.grid[env_ids, xi, yi, zi] = True
-        self._last_new_cells     = ~was_visited
+        xi, yi, zi = idx[:, 0], idx[:, 1], idx[:, 2] # extrapolate
+        was_visited              = self.grid[env_ids, xi, yi, zi] # reads current bool at each grid cell 
+        self.grid[env_ids, xi, yi, zi] = True # mark 
+        self._last_new_cells     = ~was_visited # ~ is like ! in c++ (this is dumb), returns if cell was not visited
         
         return self._last_new_cells
 
@@ -74,31 +72,67 @@ class CoverageGrid:
         
         return self.grid.view(self.num_envs, -1).float().mean(dim=-1)
 
-
-
-    # ── ZED / Depth Handoff ────────────────────────────────────────────────
-    def mark_from_depth(
-        self,
-        depth:      torch.Tensor,  # [num_envs, H, W] float32, metres
-        cam_pose:   torch.Tensor,  # [num_envs, 4, 4] camera-to-world transform
-        intrinsics: torch.Tensor,  # [3, 3] pinhole matrix (fx,0,cx / 0,fy,cy / 0,0,1)
-    ) -> torch.Tensor:
+    def mark_from_points(self, pts_w: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
         """
-        STUB — implements this to replace mark().
+        Vectorized backend — no Python loop over envs.
 
-        Unprojection math (per env, per pixel):
-            X_cam = (u - cx) * d / fx
-            Y_cam = (v - cy) * d / fy
-            Z_cam = d
-            [X_w, Y_w, Z_w, 1] = cam_pose @ [X_cam, Y_cam, Z_cam, 1]
-
-        Then call pos_to_idx([X_w, Y_w, Z_w]) and mark grid cells.
-
-        Frame note:
-            cam_pose must transform FROM camera frame TO world frame.
-            Ensure this matches the convention used in mark().
+        Args:
+            pts_w:      [num_envs, N, 3] world-frame points
+            valid_mask: [num_envs, N] bool — False entries are skipped entirely.
 
         Returns:
-            new_cells: [num_envs] bool — same contract as mark()
+            new_count: [num_envs] float — newly marked cells normalized by res^3.
         """
-        raise NotImplementedError("Depth unprojection pending — use mark() for now.")
+        num_envs, N, _ = pts_w.shape
+        total_cells    = float(self.res ** 3)
+
+        # ── Flatten ───────────────────────────────────────────────────────
+        pts_flat  = pts_w.reshape(-1, 3)                        # [num_envs*N, 3]
+        mask_flat = valid_mask.reshape(-1)                      # [num_envs*N] bool
+
+        env_idx = torch.arange(num_envs, device=self.device)\
+                       .repeat_interleave(N)                    # [num_envs*N]
+
+        # ── Drop invalid points entirely ──────────────────────────────────
+        pts_flat = pts_flat[mask_flat]                          # [M, 3]
+        env_idx  = env_idx[mask_flat]                          # [M]
+
+        if pts_flat.shape[0] == 0:
+            # No valid points this step
+            self._last_new_cells = torch.zeros(num_envs, dtype=torch.bool,    device=self.device)
+            self._last_new_count = torch.zeros(num_envs, dtype=torch.float32, device=self.device)
+            return self._last_new_count
+
+        # ── Voxelize ──────────────────────────────────────────────────────
+        idx_flat        = self.pos_to_idx(pts_flat)             # [M, 3]
+        xi, yi, zi      = idx_flat[:, 0], idx_flat[:, 1], idx_flat[:, 2]
+
+        # ── Deduplicate (env, xi, yi, zi) before snapshot ─────────────────
+        # Without this, multiple points hitting the same unvisited voxel in
+        # one step each count as a new cell — overcounting the reward.
+        R      = self.res
+        linear = env_idx * R**3 + xi * R**2 + yi * R + zi     # [M] unique key
+        linear_u, inv = torch.unique(linear, return_inverse=True)
+
+        env_idx_u = linear_u // R**3
+        xi_u      = (linear_u % R**3) // R**2
+        yi_u      = (linear_u % R**2) // R
+        zi_u      =  linear_u % R
+        
+        was_visited = self.grid[env_idx_u, xi_u, yi_u, zi_u].clone()
+        self.grid[env_idx_u, xi_u, yi_u, zi_u] = True
+
+        # ── Count new cells per env ───────────────────────────────────────
+        newly_marked    = (~was_visited).float()                # [M]
+        new_count       = torch.zeros(num_envs, device=self.device, dtype=torch.float32)
+        new_count.scatter_add_(0, env_idx, newly_marked)       # sum per env
+        new_count       = new_count / total_cells              # normalize
+
+        self._last_new_cells = new_count > 0
+        self._last_new_count = new_count
+        return new_count
+
+
+    def mark_from_lidar(self, pts_w: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
+        """LiDAR entry point — thin wrapper around mark_from_points()."""
+        return self.mark_from_points(pts_w, valid_mask)
