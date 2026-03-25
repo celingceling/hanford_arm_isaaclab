@@ -1,3 +1,5 @@
+from turtle import pos
+
 import torch
 
 class CoverageGrid:
@@ -38,29 +40,23 @@ class CoverageGrid:
         # clamp point cloud poses to tank bounds
         normed = (pos - self.bounds_min) / (self.bounds_max - self.bounds_min)
         
+        if not hasattr(self, "_dbg_pos_to_idx_calls"):
+            self._dbg_pos_to_idx_calls = 0
+        self._dbg_pos_to_idx_calls += 1
+
+        if self._dbg_pos_to_idx_calls % 50 == 0:
+            below = (normed < 0).any(dim=-1).float().mean().item()
+            above = (normed > 1).any(dim=-1).float().mean().item()
+            print("\n--- POS TO IDX ---")
+            print("pos min:", pos.amin(dim=0).detach().cpu())
+            print("pos max:", pos.amax(dim=0).detach().cpu())
+            print("normed min:", normed.amin(dim=0).detach().cpu())
+            print("normed max:", normed.amax(dim=0).detach().cpu())
+            print("fraction below bounds:", below)
+            print("fraction above bounds:", above)
+        
         # convert positions to voxel grid indices
         return (normed * self.res).long().clamp(0, self.res - 1)
-
-    def mark(self, ee_pos_w: torch.Tensor) -> torch.Tensor:
-        """
-        ** NO LONGER USED BC USING LIDAR DATA NOW **
-        Mark cells visited by EE world position. 
-
-        Args:
-            ee_pos_w: [num_envs, 3] EE positions in world frame
-        Returns:
-            new_cells: [num_envs] bool — True if a new cell was marked this step
-        """
-        
-        # get grid indicies from pos
-        idx     = self.pos_to_idx(ee_pos_w)           # [num_envs, 3]
-        env_ids = torch.arange(self.num_envs, device=self.device)
-        xi, yi, zi = idx[:, 0], idx[:, 1], idx[:, 2] # extrapolate
-        was_visited              = self.grid[env_ids, xi, yi, zi] # reads current bool at each grid cell 
-        self.grid[env_ids, xi, yi, zi] = True # mark 
-        self._last_new_cells     = ~was_visited # ~ is like ! in c++ (this is dumb), returns if cell was not visited
-        
-        return self._last_new_cells
 
     def as_tensor(self) -> torch.Tensor:
         """Returns [num_envs, res^3] float32 — policy observation input."""
@@ -86,6 +82,10 @@ class CoverageGrid:
         num_envs, N, _ = pts_w.shape
         total_cells    = float(self.res ** 3)
 
+        if not hasattr(self, "_dbg_calls"):
+            self._dbg_calls = 0
+        else: self._dbg_calls += 1
+
         # ── Flatten ───────────────────────────────────────────────────────
         pts_flat  = pts_w.reshape(-1, 3)                        # [num_envs*N, 3]
         mask_flat = valid_mask.reshape(-1)                      # [num_envs*N] bool
@@ -96,7 +96,7 @@ class CoverageGrid:
         # ── Drop invalid points entirely ──────────────────────────────────
         pts_flat = pts_flat[mask_flat]                          # [M, 3]
         env_idx  = env_idx[mask_flat]                          # [M]
-
+        
         if pts_flat.shape[0] == 0:
             # No valid points this step
             self._last_new_cells = torch.zeros(num_envs, dtype=torch.bool,    device=self.device)
@@ -121,12 +121,56 @@ class CoverageGrid:
         
         was_visited = self.grid[env_idx_u, xi_u, yi_u, zi_u].clone()
         self.grid[env_idx_u, xi_u, yi_u, zi_u] = True
-
+            
         # ── Count new cells per env ───────────────────────────────────────
         newly_marked    = (~was_visited).float()                # [M]
         new_count       = torch.zeros(num_envs, device=self.device, dtype=torch.float32)
         new_count.scatter_add_(0, env_idx_u, newly_marked)       # sum per env
         new_count       = new_count / total_cells              # normalize
+
+        if self._dbg_calls % 50 == 0:
+            
+            # print("\n--- GRID MARK INPUT ---")
+            # print("pts_w.shape:", pts_w.shape)
+            # print("valid_mask.shape:", valid_mask.shape)
+            # print("valid counts first 4 envs:", valid_mask[:4].sum(dim=1).detach().cpu())
+            # print("bounds_min:", self.bounds_min.detach().cpu())
+            # print("bounds_max:", self.bounds_max.detach().cpu())
+            # print("res:", self.res, "total_cells:", total_cells)
+
+            print("\n--- GRID VALID POINTS ---")
+            inside = ((pts_flat >= self.bounds_min) & (pts_flat <= self.bounds_max)).all(dim=1)
+            print("inside fraction:", inside.float().mean().item())
+            print("remaining valid flat points:", pts_flat.shape[0])
+            if pts_flat.shape[0] > 0:
+                print("first 10 env_idx:", env_idx[:10].detach().cpu())
+                print("first 5 pts_flat:", pts_flat[:5].detach().cpu())
+                print("pts_flat min:", pts_flat.amin(dim=0).detach().cpu())
+                print("pts_flat max:", pts_flat.amax(dim=0).detach().cpu())
+            
+            # print("\n--- GRID VOXELIZATION ---")
+            # print("first 10 voxel idx:", idx_flat[:10].detach().cpu())
+            # print("xi range:", xi.min().item(), xi.max().item())
+            # print("yi range:", yi.min().item(), yi.max().item())
+            # print("zi range:", zi.min().item(), zi.max().item())
+
+            hit_x_edge = ((xi == 0) | (xi == self.res - 1)).float().mean().item()
+            hit_y_edge = ((yi == 0) | (yi == self.res - 1)).float().mean().item()
+            hit_z_edge = ((zi == 0) | (zi == self.res - 1)).float().mean().item()
+            print("fraction on x edges:", hit_x_edge)
+            print("fraction on y edges:", hit_y_edge)
+            print("fraction on z edges:", hit_z_edge)
+            
+            print("\n--- GRID DEDUPLICATE ---")
+            print("raw voxel hits:", linear.shape[0])
+            print("unique voxel hits:", linear_u.shape[0])
+            print("already visited:", was_visited.sum().item())
+            print("newly hit before write:", (~was_visited).sum().item())
+            
+            print("\n--- GRID OUTPUT ---")
+            print("new_count first 8:", new_count[:8].detach().cpu())
+            print("last_new_cells first 8:", (new_count > 0)[:8].detach().cpu())
+            print("coverage pct first 8:", self.coverage_pct()[:8].detach().cpu())
 
         self._last_new_cells = new_count > 0
         self._last_new_count = new_count

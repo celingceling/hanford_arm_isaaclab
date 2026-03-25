@@ -264,22 +264,22 @@ class ObservationsCfg:
         ee_pose_world = ObsTerm(func=mdp.get_ee_pose_world,
                                 params={"body_name": "end_effector"})
 
-        # # PTZ state — interface frozen now; used when PTZ enters decision loop
-        # ptz_state = ObsTerm(func=mdp.get_ptz_state)
+        # PTZ state — interface frozen now; used when PTZ enters decision loop
+        ptz_state = ObsTerm(func=mdp.get_ptz_state)
 
-        # # SLAM state placeholder — zeros until RTAB-Map integrated
-        # # i do not know what state_dim means
-        # slam_state = ObsTerm(func=mdp.slam_state_placeholder,
-        #                      params={"state_dim": 64})
+        # SLAM state placeholder — zeros until RTAB-Map integrated
+        # i do not know what state_dim means
+        slam_state = ObsTerm(func=mdp.slam_state_placeholder,
+                             params={"state_dim": 64})
 
-        # # Coverage grid — READ ONLY here.
-        # # mark() is called in coverage_gain_placeholder() (reward side).
-        # # Isaac Lab step order: terminations → rewards → observations.
-        # # Reward runs before obs — grid is already updated when this reads it.
-        # coverage_grid = ObsTerm(func=mdp.get_coverage_grid)
+        # Coverage grid — READ ONLY here.
+        # mark() is called in coverage_gain_placeholder() (reward side).
+        # Isaac Lab step order: terminations → rewards → observations.
+        # Reward runs before obs — grid is already updated when this reads it.
+        coverage_grid = ObsTerm(func=mdp.get_coverage_grid)
 
-        # # REMOVED: pose_command — env is no longer goal-conditioned
-        # # pose_command = ObsTerm(func=base_mdp.generated_commands, ...)
+        # REMOVED: pose_command — env is no longer goal-conditioned
+        # pose_command = ObsTerm(func=base_mdp.generated_commands, ...)
 
         def __post_init__(self):
             self.enable_corruption  = False
@@ -341,11 +341,11 @@ class RewardsCfg:
     
     """
 
-    # # reward new grid cell discovery, also marks the cell
-    # coverage_gain = RewTerm(
-    #     func=mdp.coverage_gain_placeholder,
-    #     weight = 2.0,
-    # )
+    # reward new grid cell discovery, also marks the cell
+    coverage_gain = RewTerm(
+        func=mdp.coverage_gain_placeholder,
+        weight = 2.0,
+    )
     
     # # smoothness penalties
     # action_rate = RewTerm(
@@ -367,11 +367,11 @@ class RewardsCfg:
     #     params={"asset_name": "robot"}
     # )
     
-    # # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
-    # stagnation = RewTerm(
-    #     func=mdp.stagnation_penalty,
-    #     weight = -0.5,
-    # )
+    # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
+    stagnation = RewTerm(
+        func=mdp.stagnation_penalty,
+        weight = -0.5,
+    )
 
 
 @configclass
@@ -430,7 +430,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 9.0
+        self.episode_length_s = 15.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings

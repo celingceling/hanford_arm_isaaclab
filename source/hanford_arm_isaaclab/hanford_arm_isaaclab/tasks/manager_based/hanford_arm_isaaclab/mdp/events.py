@@ -17,7 +17,7 @@ from isaaclab.utils.math import wrap_to_pi
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     
-from ..include.config import PTZ_OFFSET_Z
+from ..include.config import *
 
     
 def reset_multi_from_3_spots(
@@ -53,8 +53,8 @@ def reset_multi_from_3_spots(
     
     # pick random pose to reset to
     idx_robot = torch.randint(0, 3, (n,), device=device)
-    idx_ptx = torch.randint(0, 2, (n,), device=device) # note only picks 0 or 1
-    idx_ptx = idx_ptx + (idx_ptx >= idx_robot).to(idx_ptx.dtype) # if idx_1 is same or greater than idx_0, flags true and + 1
+    idx_ptz = torch.randint(0, 2, (n,), device=device) # note only picks 0 or 1
+    idx_ptz = idx_ptz + (idx_ptz >= idx_robot).to(idx_ptz.dtype) # if idx_1 is same or greater than idx_0, flags true and + 1
     # will never index out of bounds bc idx_1 only goes up to 2 
 
     # initialize as default state
@@ -62,8 +62,10 @@ def reset_multi_from_3_spots(
     pose_ptz = default_root_ptz[:, :7].clone() 
     
     # keep per-env origin behavior (aka taking relative pos to global)
-    pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3] # get env origin + [x,y,z] from desired poses
-    pose_ptz[:, 0:3] = origins + poses_w[idx_ptx, 0:3] + ptz_offset
+    # pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3] # get env origin + [x,y,z] from desired poses
+    # pose_ptz[:, 0:3] = origins + poses_w[idx_ptz, 0:3] + ptz_offset
+    pose_robot[:, 0:3] = env_local_to_world(poses_w[idx_robot, 0:3], origins)
+    pose_ptz[:, 0:3] = env_local_to_world(poses_w[idx_ptz, 0:3], origins) + ptz_offset
 
     # zero velocity
     vel = torch.zeros(n,6, device=device) # is this the right shape?

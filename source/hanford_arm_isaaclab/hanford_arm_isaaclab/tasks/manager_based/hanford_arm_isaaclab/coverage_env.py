@@ -1,6 +1,6 @@
 from isaaclab.envs import ManagerBasedRLEnv
 from .hanford_arm_isaaclab_env_cfg import HanfordArmIsaaclabEnvCfg
-from .mdp.commands import TANK_LOCAL_MIN, TANK_LOCAL_MAX
+from .include.config import TANK_COVERAGE_LOCAL_MIN, TANK_COVERAGE_LOCAL_MAX
 from .include.coverage_grid import CoverageGrid
 
 
@@ -25,7 +25,7 @@ class HanfordArmCoverageEnv(ManagerBasedRLEnv):
         super().__init__(cfg, **kwargs)
 
         self.coverage_grid = CoverageGrid(
-            bounds=(TANK_LOCAL_MIN, TANK_LOCAL_MAX),
+            bounds=(TANK_COVERAGE_LOCAL_MIN, TANK_COVERAGE_LOCAL_MAX),
             resolution=10,
             num_envs=self.num_envs,
             device=self.device,
