@@ -224,7 +224,7 @@ class ActionsCfg:
         body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(
             pos=(0.0, 0.0, 0.0),
         ),
-        debug_vis=True,
+        debug_vis=False,
     )
 
 
