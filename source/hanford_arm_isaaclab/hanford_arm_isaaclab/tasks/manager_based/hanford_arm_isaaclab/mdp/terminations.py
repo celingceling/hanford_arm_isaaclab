@@ -13,7 +13,7 @@ def check_collision(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor = None,
     asset_name: str = "robot",
-    force_threshold: float = 1e-3,
+    force_threshold: float = 1.0,
 ) -> torch.Tensor:
     """
     Returns [N] bool — True if any body contact force exceeds threshold.

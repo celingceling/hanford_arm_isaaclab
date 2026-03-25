@@ -16,6 +16,8 @@ from isaaclab.utils.math import wrap_to_pi
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    
+from ..include.config import PTZ_OFFSET_Z
 
     
 def reset_multi_from_3_spots(
@@ -39,9 +41,7 @@ def reset_multi_from_3_spots(
     
     n = env_ids.numel()
     origins = env.scene.env_origins[env_ids]  # [n,3]
-    
-    # want ptz to be slightly higher
-    ptz_offset = torch.tensor([0.0, 0.0, -0.15], device=device, dtype=torch.float32)
+    ptz_offset = torch.tensor([0.0, 0.0, PTZ_OFFSET_Z], device=device, dtype=torch.float32)
     
     # define assets
     robot = env.scene[asset_names[0]]

@@ -63,9 +63,36 @@ def main():
         with torch.inference_mode():
             # compute zero actions
             actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
+            actions[:, 3] = 1.0 # set w in quaternion to 1.0 so it's valid [1.0, 0.0, 0.0, 0.0]
             # apply actions
             env.step(actions)
+        robot = env.unwrapped.scene["robot"]
 
+        # joint positions — are they changing each step?
+        joint_pos = robot.data.joint_pos[0].cpu()
+        print(f"joint_pos:    {joint_pos.numpy().round(4)}")
+
+        # joint position targets — what is the IK commanding?
+        joint_pos_target = robot.data.joint_pos_target[0].cpu()
+        print(f"joint_target: {joint_pos_target.numpy().round(4)}")
+
+        # difference — if this is large, PD is fighting a mismatch
+        diff = (joint_pos - joint_pos_target).abs()
+        print(f"pos_err:      {diff.numpy().round(4)}  max={diff.max().item():.4f}")
+
+        # contact forces — is it jittering because it's hitting something?
+        if hasattr(robot.data, "net_contact_forces_w"):
+            forces = robot.data.net_contact_forces_w[0]
+            mags = torch.linalg.norm(forces, dim=-1)
+            print(f"contact_mags: {mags.cpu().numpy().round(4)}  max={mags.max().item():.4f}")
+
+        # EE position — is it actually moving in world space?
+        ee_idx = robot.data.body_names.index("end_effector")
+        ee_pos = robot.data.body_pos_w[0, ee_idx].cpu()
+        print(f"ee_pos_w:     {ee_pos.numpy().round(4)}")
+
+        print("---")
+        
     # close the simulator
     env.close()
 

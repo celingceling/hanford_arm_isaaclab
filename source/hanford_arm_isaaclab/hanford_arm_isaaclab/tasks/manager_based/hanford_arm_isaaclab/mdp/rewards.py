@@ -16,7 +16,7 @@ from isaaclab.utils.math import wrap_to_pi
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     
-from .hanford_arm_isaaclab_env_cfg import LIDAR_MAX_DIST
+from ..include.config import LIDAR_MAX_DIST
 
 
 def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
@@ -37,7 +37,7 @@ def collision_reward(
     asset_name: str = "robot",
     base_penalty: float =  -1.0,
     force_scale: float = -0.001,
-    force_threshold: float = 1e-3,
+    force_threshold: float = 5.0,
 ) -> torch.Tensor:
     """
     Returns a 1D tensor [N] of collision rewards (negative penalties).

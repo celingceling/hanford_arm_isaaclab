@@ -15,8 +15,8 @@ class CoverageGrid:
         self.res        = resolution
         self.device     = device
         self.num_envs   = num_envs
-        self.bounds_min = torch.tensor(bounds[0], device=device, dtype=torch.float32)
-        self.bounds_max = torch.tensor(bounds[1], device=device, dtype=torch.float32)
+        self.bounds_min = bounds[0].detach().clone().to(device=device, dtype=torch.float32)
+        self.bounds_max = bounds[1].detach().clone().to(device=device, dtype=torch.float32)
 
         # [num_envs, res, res, res]
         self.grid = torch.zeros(
@@ -125,7 +125,7 @@ class CoverageGrid:
         # ── Count new cells per env ───────────────────────────────────────
         newly_marked    = (~was_visited).float()                # [M]
         new_count       = torch.zeros(num_envs, device=self.device, dtype=torch.float32)
-        new_count.scatter_add_(0, env_idx, newly_marked)       # sum per env
+        new_count.scatter_add_(0, env_idx_u, newly_marked)       # sum per env
         new_count       = new_count / total_cells              # normalize
 
         self._last_new_cells = new_count > 0

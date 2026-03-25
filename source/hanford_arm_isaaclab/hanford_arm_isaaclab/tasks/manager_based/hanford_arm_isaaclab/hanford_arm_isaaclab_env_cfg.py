@@ -28,42 +28,14 @@ from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from isaaclab.sensors import RayCasterCfg, patterns
+from isaaclab.sensors.ray_caster import patterns
+from isaaclab.sensors.ray_caster.multi_mesh_ray_caster_cfg import MultiMeshRayCasterCfg
 
 import isaacsim.core.prims as prims
 
 from . import mdp
-from .mdp.commands import TANK_LOCAL_MIN, TANK_LOCAL_MAX
 from .include.coverage_grid import CoverageGrid
-
-##
-# Global Variables
-##
-
-# PROJECT_ROOT = "C:/Users/LICF/projects"
-ARM_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/robot_pit_end_effector/robot_pit_end_effector_2.usd" # hard coded
-TANK_USD_PATH = "C:/Users/LICF/projects/hanford_wire_manipulator_with_camera_description/usd/tank.usd" # hard coded
-PTZ_USD_PATH = "C:/Users/LICF/projects/scope89_ptz/usd/scope89_ptz/scope89_ptz.usd"
-
-JOINT_NAMES=[ # list of joint names that the action will be mapped to
-                "insert_into_pipe", "rotate_in_pipe", 
-                "joint_1", "joint_2", "end_effector_joint",
-                "joint_3_pulley_spin",
-            ]
-
-PTZ_JOINT_NAMES=["J1", "J2"]
-
-EE_LIGHT_PRIM = "/World/envs/env_0/Robot/pulley_drive/SphereLight"
-    
-# reset root positions
-POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
-    [-0.554,  0.01,   2.0, 1.0, 0.0, 0.0, 0.0],
-    [ 1.012,  0.414,  2.0, 1.0, 0.0, 0.0, 0.0],
-    [ 1.678, -0.976,  2.0, 1.0, 0.0, 0.0, 0.0],
-]
-
-CONTACT_BUFFER = 0.3
-LIDAR_MAX_DIST = 5.0  # metres — single source of truth for sensor + reward filter
+from .include.config import *
 
 
 ##
@@ -197,18 +169,17 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
     
     # lidar -- mount at same link as ZED 
     # not really sure what most of the properties do exactly but this seems like a reasonable range :D
-    lidar: RayCasterCfg = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot",
-        attach_prim_path="{ENV_REGEX_NS}/Robot/pulley_drive/camera_link",
+    lidar: MultiMeshRayCasterCfg = MultiMeshRayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/pulley_drive/camera_link",
         pattern_cfg=patterns.LidarPatternCfg(
-            channels=32,           # vertical beams 
-            vertical_fov_range=(-30.0, 30.0),   # degrees, ±30 gives good tank coverage
+            channels=32,
+            vertical_fov_range=(-30.0, 30.0),
             horizontal_fov_range=(-180.0, 180.0),
-            horizontal_res=2.0,    # degrees between horizontal beams
-            # 32 channels × (360/2) = 32 × 180 = 5760 pts/scan — filter to ~2000 in rewards
+            horizontal_res=2.0,
         ),
-        max_distance=LIDAR_MAX_DIST,          # meters — tank is ~3m across, 5m gives margin
-        drift_range=(-0.0, 0.0),   # no artificial drift for now
+        max_distance=LIDAR_MAX_DIST,
+        mesh_prim_paths=["{ENV_REGEX_NS}/Tank"],
+        drift_range=(0.0, 0.0),
         debug_vis=False,
     )
 
@@ -253,6 +224,7 @@ class ActionsCfg:
         body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(
             pos=(0.0, 0.0, 0.0),
         ),
+        debug_vis=True,
     )
 
 
@@ -292,22 +264,22 @@ class ObservationsCfg:
         ee_pose_world = ObsTerm(func=mdp.get_ee_pose_world,
                                 params={"body_name": "end_effector"})
 
-        # PTZ state — interface frozen now; used when PTZ enters decision loop
-        ptz_state = ObsTerm(func=mdp.get_ptz_state)
+        # # PTZ state — interface frozen now; used when PTZ enters decision loop
+        # ptz_state = ObsTerm(func=mdp.get_ptz_state)
 
-        # SLAM state placeholder — zeros until RTAB-Map integrated
-        # i do not know what state_dim means
-        slam_state = ObsTerm(func=mdp.slam_state_placeholder,
-                             params={"state_dim": 64})
+        # # SLAM state placeholder — zeros until RTAB-Map integrated
+        # # i do not know what state_dim means
+        # slam_state = ObsTerm(func=mdp.slam_state_placeholder,
+        #                      params={"state_dim": 64})
 
-        # Coverage grid — READ ONLY here.
-        # mark() is called in coverage_gain_placeholder() (reward side).
-        # Isaac Lab step order: terminations → rewards → observations.
-        # Reward runs before obs — grid is already updated when this reads it.
-        coverage_grid = ObsTerm(func=mdp.get_coverage_grid)
+        # # Coverage grid — READ ONLY here.
+        # # mark() is called in coverage_gain_placeholder() (reward side).
+        # # Isaac Lab step order: terminations → rewards → observations.
+        # # Reward runs before obs — grid is already updated when this reads it.
+        # coverage_grid = ObsTerm(func=mdp.get_coverage_grid)
 
-        # REMOVED: pose_command — env is no longer goal-conditioned
-        # pose_command = ObsTerm(func=base_mdp.generated_commands, ...)
+        # # REMOVED: pose_command — env is no longer goal-conditioned
+        # # pose_command = ObsTerm(func=base_mdp.generated_commands, ...)
 
         def __post_init__(self):
             self.enable_corruption  = False
@@ -333,26 +305,26 @@ class EventCfg:
         },
     )
     
-    # reset joints to zero state
-    reset_robot_joints = EventTerm( # probably a more direct function than this one exists idk but it works and is isaaclab native
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    # # reset joints to zero state
+    # reset_robot_joints = EventTerm( # probably a more direct function than this one exists idk but it works and is isaaclab native
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
 
-    reset_ptz_joints = EventTerm(
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("ptz"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    # reset_ptz_joints = EventTerm(
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("ptz"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
     
     # Clear coverage grid and no-progress history each episode
     reset_coverage_buffer = EventTerm(
@@ -369,37 +341,37 @@ class RewardsCfg:
     
     """
 
-    # reward new grid cell discovery, also marks the cell
-    coverage_gain = RewTerm(
-        func=mdp.coverage_gain_placeholder,
-        weight = 2.0,
-    )
+    # # reward new grid cell discovery, also marks the cell
+    # coverage_gain = RewTerm(
+    #     func=mdp.coverage_gain_placeholder,
+    #     weight = 2.0,
+    # )
     
-    # smoothness penalties
-    action_rate = RewTerm(
-        func=base_mdp.action_rate_l2,
-        weight = -0.005,
-    )
-    joint_vel = RewTerm(
-        func=base_mdp.joint_vel_l2, 
-        weight=-0.001,
-        params={
-            "asset_cfg": SceneEntityCfg("robot")
-        }
-    )
+    # # smoothness penalties
+    # action_rate = RewTerm(
+    #     func=base_mdp.action_rate_l2,
+    #     weight = -0.005,
+    # )
+    # joint_vel = RewTerm(
+    #     func=base_mdp.joint_vel_l2, 
+    #     weight=-0.001,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot")
+    #     }
+    # )
     
-    # Collisions
-    arm_collision = RewTerm(
-        func=mdp.collision_reward, 
-        weight = 1.0, # positive bc collision_reward() already returns negative
-        params={"asset_name": "robot"}
-    )
+    # # Collisions
+    # arm_collision = RewTerm(
+    #     func=mdp.collision_reward, 
+    #     weight = 1.0, # positive bc collision_reward() already returns negative
+    #     params={"asset_name": "robot"}
+    # )
     
-    # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
-    stagnation = RewTerm(
-        func=mdp.stagnation_penalty,
-        weight = -0.5,
-    )
+    # # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
+    # stagnation = RewTerm(
+    #     func=mdp.stagnation_penalty,
+    #     weight = -0.5,
+    # )
 
 
 @configclass
@@ -412,21 +384,24 @@ class TerminationsCfg:
         time_out=True
     )
     
-    # (2) Collision
-    collided = DoneTerm(
-        func=mdp.check_collision, 
-        time_out=False
-    )
+    # # (2) Collision # change to penalty instead of terminate
+    # collided = DoneTerm(
+    #     func=mdp.check_collision, 
+    #     time_out=False,
+    #     params={
+    #         "force_threshold": 5.0,
+    #     }
+    # )
     
-    # (3) No progress
-    no_progress = DoneTerm(
-        func=mdp.no_progress_termination,
-        params={
-            "min_coverage_gain": 0.005,
-            "window_steps": 100,
-        },
-        time_out=False,
-    )
+    # # (3) No progress
+    # no_progress = DoneTerm(
+    #     func=mdp.no_progress_termination,
+    #     params={
+    #         "min_coverage_gain": 0.005,
+    #         "window_steps": 100,
+    #     },
+    #     time_out=False,
+    # )
 
 
 
@@ -455,7 +430,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 12.0
+        self.episode_length_s = 5.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings

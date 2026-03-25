@@ -4,6 +4,7 @@ from isaaclab.envs.mdp.commands import UniformPoseCommand
 from isaaclab.envs.mdp.commands.commands_cfg import UniformPoseCommandCfg
 from isaaclab.utils.math import quat_from_euler_xyz, quat_unique, subtract_frame_transforms, compute_pose_error
 from isaaclab.utils import configclass
+from ..include.config import *
 
 
 # ── tuneable constants ────────────────────────────────────────────────────────
@@ -14,11 +15,6 @@ ARM_REACH_MAX       = 0.7  # [m] max reach from root - tune to your arm geometry
 # EE-centered step size limits (per resample)
 EE_STEP_MIN = 0.15   # [m] deadzone: avoid tiny moves (increase to reduce jitter)
 EE_STEP_MAX = 0.60   # [m] max jump per new target (decrease to reduce IK thrash)
-
-# Tank AABB in world frame (same values as CommandsCfg.ranges but used for
-# the collision / in-tank check).  Keep in sync with your ranges.
-TANK_LOCAL_MIN = torch.tensor([-1.682, -1.287, 0.381]) # margin = 0.3
-TANK_LOCAL_MAX = torch.tensor([ 2.293,  0.936, 1.882])
 # ─────────────────────────────────────────────────────────────────────────────
 
 

@@ -30,7 +30,6 @@ gym.register(
 )
 
 
-
 gym.register(
     id="Template-Hanford-Arm-Isaaclab-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
