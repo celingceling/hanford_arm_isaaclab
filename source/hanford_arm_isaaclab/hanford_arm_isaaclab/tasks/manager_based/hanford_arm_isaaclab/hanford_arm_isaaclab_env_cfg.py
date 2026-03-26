@@ -147,7 +147,7 @@ class HanfordArmIsaaclabSceneCfg(InteractiveSceneCfg):
         prim_path="/World/DomeLight",
         spawn=sim_utils.DomeLightCfg(
             color=(0.9,0.9,0.9), 
-            intensity=100.0
+            intensity=70.0
             ),
     )
 
@@ -430,7 +430,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 15.0
+        self.episode_length_s = 6.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
