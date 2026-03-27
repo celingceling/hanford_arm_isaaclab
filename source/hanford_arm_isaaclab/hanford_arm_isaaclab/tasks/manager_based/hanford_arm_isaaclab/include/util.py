@@ -24,13 +24,14 @@ EE_LIGHT_PRIM = "/World/envs/env_0/Robot/pulley_drive/SphereLight"
     
 # reset root positions
 POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
-    [-0.55521,  0.01049,   1.10504, 1.0, 0.0, 0.0, 0.0],
-    [ 1.0123,  0.41759,  1.10504, 1.0, 0.0, 0.0, 0.0],
-    [ 1.671, -0.97459,  1.10504, 1.0, 0.0, 0.0, 0.0],
+    [-0.55521, 0.01049, 0.0, 1.0, 0.0, 0.0, 0.0],
+    [ 1.0123, 0.41759, 0.0, 1.0, 0.0, 0.0, 0.0],
+    [ 1.671, -0.97459, 0.0, 1.0, 0.0, 0.0, 0.0],
 ]
 
 # ptz offset for reset
-PTZ_OFFSET_Z = 0.8
+PTZ_OFFSET_Z = 1.9
+ARM_OFFSET_Z = 3.0
 
 CONTACT_BUFFER = 0.3
 LIDAR_MAX_DIST = 5.0  # metres — single source of truth for sensor + reward filter

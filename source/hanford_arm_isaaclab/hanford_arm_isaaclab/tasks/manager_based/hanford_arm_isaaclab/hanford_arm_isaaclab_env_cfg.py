@@ -52,7 +52,7 @@ ARM_CFG = ArticulationCfg(
         )
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        joint_pos={"insert_into_pipe": 1.5, # start with arm at top
+        joint_pos={"insert_into_pipe": 0.0,
                    "rotate_in_pipe": 0.0, 
                     "joint_1": 0.0, 
                     "joint_2": 0.0, 
@@ -295,7 +295,7 @@ class EventCfg:
     
     """
     
-    # reset PTZ and robot roots randomly in one of the 3 ports
+    # reset PTZ and robot roots randomly in one of the 3 ports and also joints back to default
     reset_roots = EventTerm(
         func=mdp.reset_multi_from_3_spots,
         mode="reset",
@@ -305,26 +305,26 @@ class EventCfg:
         },
     )
     
-    # reset joints to zero state
-    reset_robot_joints = EventTerm( # probably a more direct function than this one exists idk but it works and is isaaclab native
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    # # reset joints to zero state
+    # reset_robot_joints = EventTerm(
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
 
-    reset_ptz_joints = EventTerm(
-        func=base_mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("ptz"),
-            "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    # reset_ptz_joints = EventTerm(
+    #     func=base_mdp.reset_joints_by_offset,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("ptz"),
+    #         "position_range": (0.0, 0.0),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
     
     # Clear coverage grid and no-progress history each episode
     reset_coverage_buffer = EventTerm(
@@ -344,7 +344,7 @@ class RewardsCfg:
     # reward new grid cell discovery, also marks the cell
     coverage_gain = RewTerm(
         func=mdp.coverage_gain_placeholder,
-        weight = 10.0,
+        weight = 8.0,
     )
     
     # smoothness penalties
@@ -363,14 +363,14 @@ class RewardsCfg:
     # Collisions
     arm_collision = RewTerm(
         func=mdp.collision_reward, 
-        weight = 15.0, # positive bc collision_reward() already returns negative
+        weight = 10.0, # positive bc collision_reward() already returns negative
         params={"asset_name": "robot"}
     )
     
     # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
     stagnation = RewTerm(
         func=mdp.stagnation_penalty,
-        weight = -4.0,
+        weight = -6.0,
     )
 
 
@@ -429,10 +429,10 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
-        self.decimation = 2
-        self.episode_length_s = 6.0
+        self.decimation = 2 # number of physics steps per control, control (policy + env.step()) runs at 60 hz
+        self.episode_length_s = 5.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
-        self.sim.dt = 1 / 120
+        self.sim.dt = 1 / 120 # physics runs at 120 hz
         self.sim.render_interval = self.decimation

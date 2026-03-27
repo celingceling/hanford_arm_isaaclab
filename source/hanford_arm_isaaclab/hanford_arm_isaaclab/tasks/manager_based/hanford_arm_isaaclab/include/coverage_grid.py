@@ -128,7 +128,7 @@ class CoverageGrid:
         new_count.scatter_add_(0, env_idx_u, newly_marked)       # sum per env
         new_count       = new_count / total_cells              # normalize
 
-        # if self._dbg_calls % 50 == 0:f
+        if self._dbg_calls % 250 == 0:
             
             # print("\n--- GRID MARK INPUT ---")
             # print("pts_w.shape:", pts_w.shape)
@@ -138,9 +138,9 @@ class CoverageGrid:
             # print("bounds_max:", self.bounds_max.detach().cpu())
             # print("res:", self.res, "total_cells:", total_cells)
 
-            # print("\n--- GRID VALID POINTS ---")
-            # inside = ((pts_flat >= self.bounds_min) & (pts_flat <= self.bounds_max)).all(dim=1)
-            # print("inside fraction:", inside.float().mean().item())
+            print("\n--- GRID VALID POINTS ---")
+            inside = ((pts_flat >= self.bounds_min) & (pts_flat <= self.bounds_max)).all(dim=1)
+            print("inside fraction:", inside.float().mean().item())
             # print("remaining valid flat points:", pts_flat.shape[0])
             # if pts_flat.shape[0] > 0:
             #     print("first 10 env_idx:", env_idx[:10].detach().cpu())
@@ -161,11 +161,11 @@ class CoverageGrid:
             # print("fraction on y edges:", hit_y_edge)
             # print("fraction on z edges:", hit_z_edge)
             
-            # print("\n--- GRID DEDUPLICATE ---")
-            # print("raw voxel hits:", linear.shape[0])
-            # print("unique voxel hits:", linear_u.shape[0])
-            # print("already visited:", was_visited.sum().item())
-            # print("newly hit before write:", (~was_visited).sum().item())
+            print("\n--- GRID DEDUPLICATE ---")
+            print("raw voxel hits:", linear.shape[0])
+            print("unique voxel hits:", linear_u.shape[0])
+            print("already visited:", was_visited.sum().item())
+            print("newly hit before write:", (~was_visited).sum().item())
             
             # print("\n--- GRID OUTPUT ---")
             # print("new_count first 8:", new_count[:8].detach().cpu())

@@ -60,14 +60,14 @@ def main():
     
     ee_idx = robot.data.body_names.index("end_effector")
     
-    print("=== AFTER RESET ===")
-    print(f"joint_pos:    {robot.data.joint_pos[0].cpu().numpy().round(4)}")
-    print(f"joint_target: {robot.data.joint_pos_target[0].cpu().numpy().round(4)}")
-    print(f"pos_err:      {(robot.data.joint_pos[0] - robot.data.joint_pos_target[0]).abs().cpu().numpy().round(4)}")
-    print(f"ee_pos_w:     {robot.data.body_pos_w[0, ee_idx].cpu().numpy().round(4)}")
-    if hasattr(env.unwrapped, 'action_manager'):
-        print(f"last_action:  {env.unwrapped.action_manager.action[0].cpu().numpy().round(4)}")
-    print("=== END RESET ===")
+    # print("=== AFTER RESET ===")
+    # print(f"joint_pos:    {robot.data.joint_pos[0].cpu().numpy().round(4)}")
+    # print(f"joint_target: {robot.data.joint_pos_target[0].cpu().numpy().round(4)}")
+    # print(f"pos_err:      {(robot.data.joint_pos[0] - robot.data.joint_pos_target[0]).abs().cpu().numpy().round(4)}")
+    # print(f"ee_pos_w:     {robot.data.body_pos_w[0, ee_idx].cpu().numpy().round(4)}")
+    # if hasattr(env.unwrapped, 'action_manager'):
+    #     print(f"last_action:  {env.unwrapped.action_manager.action[0].cpu().numpy().round(4)}")
+    # print("=== END RESET ===")
     
     # simulate environment
     while simulation_app.is_running():
@@ -75,34 +75,34 @@ def main():
             actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
 
             # DEBUG: print the exact action being sent
-            print(f"action:       {actions[0].cpu().numpy().round(4)}")
+            # print(f"action:       {actions[0].cpu().numpy().round(4)}")
 
             env.step(actions)
 
-        robot = env.unwrapped.scene["robot"]
+        # robot = env.unwrapped.scene["robot"]
 
-        joint_pos = robot.data.joint_pos[0].cpu()
-        print(f"joint_pos:    {joint_pos.numpy().round(4)}")
+        # joint_pos = robot.data.joint_pos[0].cpu()
+        # print(f"joint_pos:    {joint_pos.numpy().round(4)}")
 
-        joint_pos_target = robot.data.joint_pos_target[0].cpu()
-        print(f"joint_target: {joint_pos_target.numpy().round(4)}")
+        # joint_pos_target = robot.data.joint_pos_target[0].cpu()
+        # print(f"joint_target: {joint_pos_target.numpy().round(4)}")
 
-        diff = (joint_pos - joint_pos_target).abs()
-        print(f"pos_err:      {diff.numpy().round(4)}  max={diff.max().item():.4f}")
+        # diff = (joint_pos - joint_pos_target).abs()
+        # print(f"pos_err:      {diff.numpy().round(4)}  max={diff.max().item():.4f}")
 
-        # Contact forces
-        if hasattr(robot.data, "net_contact_forces_w"):
-            forces = robot.data.net_contact_forces_w[0]          # [num_bodies, 3]
-            mags = torch.linalg.norm(forces, dim=-1)
-            print(f"contact_mags: {mags.cpu().numpy().round(4)}  max={mags.max().item():.4f}")
-        else:
-            print("contact_mags: net_contact_forces_w not available")
+        # # Contact forces
+        # if hasattr(robot.data, "net_contact_forces_w"):
+        #     forces = robot.data.net_contact_forces_w[0]          # [num_bodies, 3]
+        #     mags = torch.linalg.norm(forces, dim=-1)
+        #     print(f"contact_mags: {mags.cpu().numpy().round(4)}  max={mags.max().item():.4f}")
+        # else:
+        #     print("contact_mags: net_contact_forces_w not available")
 
-        ee_idx = robot.data.body_names.index("end_effector")
-        ee_pos = robot.data.body_pos_w[0, ee_idx].cpu()
-        print(f"ee_pos_w:     {ee_pos.numpy().round(4)}")
+        # ee_idx = robot.data.body_names.index("end_effector")
+        # ee_pos = robot.data.body_pos_w[0, ee_idx].cpu()
+        # print(f"ee_pos_w:     {ee_pos.numpy().round(4)}")
 
-        print("---")
+        # print("---")
 
 
 if __name__ == "__main__":

@@ -41,7 +41,8 @@ def reset_multi_from_3_spots(
     
     n = env_ids.numel()
     origins = env.scene.env_origins[env_ids]  # [n,3]
-    ptz_offset = torch.tensor([0.0, 0.0, PTZ_OFFSET_Z], device=device, dtype=torch.float32)
+    ptz_offset_z = torch.tensor([0.0, 0.0, PTZ_OFFSET_Z], device=device, dtype=torch.float32)
+    arm_offset_z = torch.tensor([0.0, 0.0, ARM_OFFSET_Z], device=device, dtype=torch.float32)
     
     # define assets
     robot = env.scene[asset_names[0]]
@@ -64,11 +65,11 @@ def reset_multi_from_3_spots(
     # keep per-env origin behavior (aka taking relative pos to global)
     # pose_robot[:, 0:3] = origins + poses_w[idx_robot, 0:3] # get env origin + [x,y,z] from desired poses
     # pose_ptz[:, 0:3] = origins + poses_w[idx_ptz, 0:3] + ptz_offset
-    pose_robot[:, 0:3] = env_local_to_world(poses_w[idx_robot, 0:3], origins)
-    pose_ptz[:, 0:3] = env_local_to_world(poses_w[idx_ptz, 0:3], origins) + ptz_offset
+    pose_robot[:, 0:3] = env_local_to_world(poses_w[idx_robot, 0:3], origins) + arm_offset_z
+    pose_ptz[:, 0:3] = env_local_to_world(poses_w[idx_ptz, 0:3], origins) + ptz_offset_z
 
     # zero velocity
-    vel = torch.zeros(n,6, device=device) # is this the right shape?
+    vel = torch.zeros(n,6, device=device)
     
     # write states to sim
     robot.write_root_pose_to_sim(pose_robot,env_ids=env_ids)
@@ -76,6 +77,15 @@ def reset_multi_from_3_spots(
 
     ptz.write_root_pose_to_sim(pose_ptz,env_ids=env_ids)
     ptz.write_root_velocity_to_sim(vel,env_ids=env_ids)
+    
+    # reset joints to default positions / velocities
+    robot_joint_pos = robot.data.default_joint_pos[env_ids].clone()
+    robot_joint_vel = robot.data.default_joint_vel[env_ids].clone()
+    robot.write_joint_state_to_sim(robot_joint_pos, robot_joint_vel, env_ids=env_ids)
+
+    ptz_joint_pos = ptz.data.default_joint_pos[env_ids].clone()
+    ptz_joint_vel = ptz.data.default_joint_vel[env_ids].clone()
+    ptz.write_joint_state_to_sim(ptz_joint_pos, ptz_joint_vel, env_ids=env_ids)
  
 def reset_coverage_buffer(env: "ManagerBasedRLEnv", env_ids: torch.Tensor):
     """
