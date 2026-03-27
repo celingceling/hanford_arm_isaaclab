@@ -16,7 +16,7 @@ from isaaclab.utils.math import wrap_to_pi
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     
-from ..include.config import *
+from ..include.util import *
 
 
 def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:

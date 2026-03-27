@@ -17,7 +17,7 @@ from isaaclab.utils.math import wrap_to_pi
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     
-from ..include.config import *
+from ..include.util import *
 
     
 def reset_multi_from_3_spots(

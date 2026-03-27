@@ -30,7 +30,7 @@ POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
 ]
 
 # ptz offset for reset
-PTZ_OFFSET_Z = 0.9
+PTZ_OFFSET_Z = 0.8
 
 CONTACT_BUFFER = 0.3
 LIDAR_MAX_DIST = 5.0  # metres — single source of truth for sensor + reward filter
@@ -51,71 +51,6 @@ TANK_COVERAGE_LOCAL_MAX = TANK_MESH_LOCAL_MAX.clone()
 # Tank AABB local frame with 0.3 margin for CommandsCfg.ranges
 TANK_LOCAL_MIN = torch.tensor([-1.682, -1.287, 0.381])
 TANK_LOCAL_MAX = torch.tensor([ 2.293,  0.936, 1.882])
-
-# -----------------------------------------------------------------------------
-# Internal helpers
-# -----------------------------------------------------------------------------
-
-def _as_tensor_like(x: Any, *, device=None, dtype=None) -> torch.Tensor:
-    """Convert x to a tensor on the requested device/dtype.
-
-    If x is already a tensor, preserve it unless device/dtype override is given.
-    """
-    if isinstance(x, torch.Tensor):
-        if device is None and dtype is None:
-            return x
-        return x.to(device=device if device is not None else x.device,
-                    dtype=dtype if dtype is not None else x.dtype)
-    return torch.as_tensor(x, device=device, dtype=dtype)
-
-
-def _infer_device_dtype(*items: Any) -> tuple[torch.device | None, torch.dtype | None]:
-    """Infer device/dtype from the first tensor-like argument that is a Tensor."""
-    for item in items:
-        if isinstance(item, torch.Tensor):
-            return item.device, item.dtype
-    return None, None
-
-
-def _as_vec3_tensor(x: Any, *, device=None, dtype=None) -> torch.Tensor:
-    """Return x as a tensor whose trailing dimension is 3.
-
-    Accepts:
-        [3]
-        [N, 3]
-        [E, N, 3]
-
-    Raises:
-        ValueError if the trailing dimension is not 3.
-    """
-    t = _as_tensor_like(x, device=device, dtype=dtype)
-    if t.shape[-1] != 3:
-        raise ValueError(f"Expected trailing dimension 3, got shape {tuple(t.shape)}")
-    return t
-
-
-def _expand_offset_like(offset: Any, ref: torch.Tensor) -> torch.Tensor:
-    """Broadcast a 3-vector or compatible [..., 3] tensor to match ref.
-
-    Examples:
-        offset [3]     -> [1, 3] or [1, 1, 3] as needed
-        offset [E, 3]  -> [E, 1, 3] if ref is [E, N, 3]
-    """
-    off = _as_vec3_tensor(offset, device=ref.device, dtype=ref.dtype)
-
-    # Same rank already: let PyTorch broadcasting handle it
-    if off.ndim == ref.ndim:
-        return off
-
-    # Common case: ref [E, N, 3], off [E, 3] -> [E, 1, 3]
-    if off.ndim == ref.ndim - 1:
-        return off.unsqueeze(-2)
-
-    # Common case: off [3] -> prepend singleton dims
-    while off.ndim < ref.ndim:
-        off = off.unsqueeze(0)
-
-    return off
 
 
 # -----------------------------------------------------------------------------
@@ -192,3 +127,70 @@ def bounds_contains(points: Any, bounds_min: Any, bounds_max: Any) -> torch.Tens
     mn = _expand_offset_like(bounds_min, pts)
     mx = _expand_offset_like(bounds_max, pts)
     return ((pts >= mn) & (pts <= mx)).all(dim=-1)
+
+
+# -----------------------------------------------------------------------------
+# Internal helpers
+# -----------------------------------------------------------------------------
+
+def _as_tensor_like(x: Any, *, device=None, dtype=None) -> torch.Tensor:
+    """Convert x to a tensor on the requested device/dtype.
+
+    If x is already a tensor, preserve it unless device/dtype override is given.
+    """
+    if isinstance(x, torch.Tensor):
+        if device is None and dtype is None:
+            return x
+        return x.to(device=device if device is not None else x.device,
+                    dtype=dtype if dtype is not None else x.dtype)
+    return torch.as_tensor(x, device=device, dtype=dtype)
+
+
+def _infer_device_dtype(*items: Any) -> tuple[torch.device | None, torch.dtype | None]:
+    """Infer device/dtype from the first tensor-like argument that is a Tensor."""
+    for item in items:
+        if isinstance(item, torch.Tensor):
+            return item.device, item.dtype
+    return None, None
+
+
+def _as_vec3_tensor(x: Any, *, device=None, dtype=None) -> torch.Tensor:
+    """Return x as a tensor whose trailing dimension is 3.
+
+    Accepts:
+        [3]
+        [N, 3]
+        [E, N, 3]
+
+    Raises:
+        ValueError if the trailing dimension is not 3.
+    """
+    t = _as_tensor_like(x, device=device, dtype=dtype)
+    if t.shape[-1] != 3:
+        raise ValueError(f"Expected trailing dimension 3, got shape {tuple(t.shape)}")
+    return t
+
+
+def _expand_offset_like(offset: Any, ref: torch.Tensor) -> torch.Tensor:
+    """Broadcast a 3-vector or compatible [..., 3] tensor to match ref.
+
+    Examples:
+        offset [3]     -> [1, 3] or [1, 1, 3] as needed
+        offset [E, 3]  -> [E, 1, 3] if ref is [E, N, 3]
+    """
+    off = _as_vec3_tensor(offset, device=ref.device, dtype=ref.dtype)
+
+    # Same rank already: let PyTorch broadcasting handle it
+    if off.ndim == ref.ndim:
+        return off
+
+    # Common case: ref [E, N, 3], off [E, 3] -> [E, 1, 3]
+    if off.ndim == ref.ndim - 1:
+        return off.unsqueeze(-2)
+
+    # Common case: off [3] -> prepend singleton dims
+    while off.ndim < ref.ndim:
+        off = off.unsqueeze(0)
+
+    return off
+

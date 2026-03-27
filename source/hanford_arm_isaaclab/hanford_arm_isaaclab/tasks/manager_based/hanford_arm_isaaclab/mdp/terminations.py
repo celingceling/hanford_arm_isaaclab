@@ -40,7 +40,7 @@ def no_progress_termination(
     env: "ManagerBasedRLEnv",
     env_ids: torch.Tensor = None,
     min_coverage_gain: float = 0.005,
-    window_steps: int = 100,
+    window_steps: int = 1000,
 ) -> torch.Tensor:
     """
     Terminates envs that gained less than min_coverage_gain over the last window_steps.

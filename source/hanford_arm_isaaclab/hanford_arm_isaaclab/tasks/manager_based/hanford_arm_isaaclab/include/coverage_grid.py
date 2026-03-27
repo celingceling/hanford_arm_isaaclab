@@ -44,16 +44,16 @@ class CoverageGrid:
             self._dbg_pos_to_idx_calls = 0
         self._dbg_pos_to_idx_calls += 1
 
-        if self._dbg_pos_to_idx_calls % 50 == 0:
-            below = (normed < 0).any(dim=-1).float().mean().item()
-            above = (normed > 1).any(dim=-1).float().mean().item()
-            print("\n--- POS TO IDX ---")
-            print("pos min:", pos.amin(dim=0).detach().cpu())
-            print("pos max:", pos.amax(dim=0).detach().cpu())
-            print("normed min:", normed.amin(dim=0).detach().cpu())
-            print("normed max:", normed.amax(dim=0).detach().cpu())
-            print("fraction below bounds:", below)
-            print("fraction above bounds:", above)
+        # if self._dbg_pos_to_idx_calls % 50 == 0:
+        #     below = (normed < 0).any(dim=-1).float().mean().item()
+        #     above = (normed > 1).any(dim=-1).float().mean().item()
+        #     print("\n--- POS TO IDX ---")
+        #     print("pos min:", pos.amin(dim=0).detach().cpu())
+        #     print("pos max:", pos.amax(dim=0).detach().cpu())
+        #     print("normed min:", normed.amin(dim=0).detach().cpu())
+        #     print("normed max:", normed.amax(dim=0).detach().cpu())
+        #     print("fraction below bounds:", below)
+        #     print("fraction above bounds:", above)
         
         # convert positions to voxel grid indices
         return (normed * self.res).long().clamp(0, self.res - 1)
@@ -128,7 +128,7 @@ class CoverageGrid:
         new_count.scatter_add_(0, env_idx_u, newly_marked)       # sum per env
         new_count       = new_count / total_cells              # normalize
 
-        if self._dbg_calls % 50 == 0:
+        # if self._dbg_calls % 50 == 0:f
             
             # print("\n--- GRID MARK INPUT ---")
             # print("pts_w.shape:", pts_w.shape)
@@ -138,15 +138,15 @@ class CoverageGrid:
             # print("bounds_max:", self.bounds_max.detach().cpu())
             # print("res:", self.res, "total_cells:", total_cells)
 
-            print("\n--- GRID VALID POINTS ---")
-            inside = ((pts_flat >= self.bounds_min) & (pts_flat <= self.bounds_max)).all(dim=1)
-            print("inside fraction:", inside.float().mean().item())
-            print("remaining valid flat points:", pts_flat.shape[0])
-            if pts_flat.shape[0] > 0:
-                print("first 10 env_idx:", env_idx[:10].detach().cpu())
-                print("first 5 pts_flat:", pts_flat[:5].detach().cpu())
-                print("pts_flat min:", pts_flat.amin(dim=0).detach().cpu())
-                print("pts_flat max:", pts_flat.amax(dim=0).detach().cpu())
+            # print("\n--- GRID VALID POINTS ---")
+            # inside = ((pts_flat >= self.bounds_min) & (pts_flat <= self.bounds_max)).all(dim=1)
+            # print("inside fraction:", inside.float().mean().item())
+            # print("remaining valid flat points:", pts_flat.shape[0])
+            # if pts_flat.shape[0] > 0:
+            #     print("first 10 env_idx:", env_idx[:10].detach().cpu())
+            #     print("first 5 pts_flat:", pts_flat[:5].detach().cpu())
+            #     print("pts_flat min:", pts_flat.amin(dim=0).detach().cpu())
+            #     print("pts_flat max:", pts_flat.amax(dim=0).detach().cpu())
             
             # print("\n--- GRID VOXELIZATION ---")
             # print("first 10 voxel idx:", idx_flat[:10].detach().cpu())
@@ -154,23 +154,23 @@ class CoverageGrid:
             # print("yi range:", yi.min().item(), yi.max().item())
             # print("zi range:", zi.min().item(), zi.max().item())
 
-            hit_x_edge = ((xi == 0) | (xi == self.res - 1)).float().mean().item()
-            hit_y_edge = ((yi == 0) | (yi == self.res - 1)).float().mean().item()
-            hit_z_edge = ((zi == 0) | (zi == self.res - 1)).float().mean().item()
-            print("fraction on x edges:", hit_x_edge)
-            print("fraction on y edges:", hit_y_edge)
-            print("fraction on z edges:", hit_z_edge)
+            # hit_x_edge = ((xi == 0) | (xi == self.res - 1)).float().mean().item()
+            # hit_y_edge = ((yi == 0) | (yi == self.res - 1)).float().mean().item()
+            # hit_z_edge = ((zi == 0) | (zi == self.res - 1)).float().mean().item()
+            # print("fraction on x edges:", hit_x_edge)
+            # print("fraction on y edges:", hit_y_edge)
+            # print("fraction on z edges:", hit_z_edge)
             
-            print("\n--- GRID DEDUPLICATE ---")
-            print("raw voxel hits:", linear.shape[0])
-            print("unique voxel hits:", linear_u.shape[0])
-            print("already visited:", was_visited.sum().item())
-            print("newly hit before write:", (~was_visited).sum().item())
+            # print("\n--- GRID DEDUPLICATE ---")
+            # print("raw voxel hits:", linear.shape[0])
+            # print("unique voxel hits:", linear_u.shape[0])
+            # print("already visited:", was_visited.sum().item())
+            # print("newly hit before write:", (~was_visited).sum().item())
             
-            print("\n--- GRID OUTPUT ---")
-            print("new_count first 8:", new_count[:8].detach().cpu())
-            print("last_new_cells first 8:", (new_count > 0)[:8].detach().cpu())
-            print("coverage pct first 8:", self.coverage_pct()[:8].detach().cpu())
+            # print("\n--- GRID OUTPUT ---")
+            # print("new_count first 8:", new_count[:8].detach().cpu())
+            # print("last_new_cells first 8:", (new_count > 0)[:8].detach().cpu())
+            # print("coverage pct first 8:", self.coverage_pct()[:8].detach().cpu())
 
         self._last_new_cells = new_count > 0
         self._last_new_count = new_count

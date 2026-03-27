@@ -35,7 +35,7 @@ import isaacsim.core.prims as prims
 
 from . import mdp
 from .include.coverage_grid import CoverageGrid
-from .include.config import *
+from .include.util import *
 
 
 ##
@@ -344,33 +344,33 @@ class RewardsCfg:
     # reward new grid cell discovery, also marks the cell
     coverage_gain = RewTerm(
         func=mdp.coverage_gain_placeholder,
-        weight = 2.0,
+        weight = 10.0,
     )
     
-    # # smoothness penalties
-    # action_rate = RewTerm(
-    #     func=base_mdp.action_rate_l2,
-    #     weight = -0.005,
-    # )
-    # joint_vel = RewTerm(
-    #     func=base_mdp.joint_vel_l2, 
-    #     weight=-0.001,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot")
-    #     }
-    # )
+    # smoothness penalties
+    action_rate = RewTerm(
+        func=base_mdp.action_rate_l2,
+        weight = -0.005,
+    )
+    joint_vel = RewTerm(
+        func=base_mdp.joint_vel_l2, 
+        weight=-0.001,
+        params={
+            "asset_cfg": SceneEntityCfg("robot")
+        }
+    )
     
-    # # Collisions
-    # arm_collision = RewTerm(
-    #     func=mdp.collision_reward, 
-    #     weight = 1.0, # positive bc collision_reward() already returns negative
-    #     params={"asset_name": "robot"}
-    # )
+    # Collisions
+    arm_collision = RewTerm(
+        func=mdp.collision_reward, 
+        weight = 15.0, # positive bc collision_reward() already returns negative
+        params={"asset_name": "robot"}
+    )
     
     # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
     stagnation = RewTerm(
         func=mdp.stagnation_penalty,
-        weight = -0.5,
+        weight = -4.0,
     )
 
 
@@ -393,12 +393,12 @@ class TerminationsCfg:
     #     }
     # )
     
-    # # (3) No progress
+    # # (3) No progress there is something wrong with this
     # no_progress = DoneTerm(
     #     func=mdp.no_progress_termination,
     #     params={
     #         "min_coverage_gain": 0.005,
-    #         "window_steps": 100,
+    #         "window_steps": 500,
     #     },
     #     time_out=False,
     # )
@@ -436,16 +436,3 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
-        
-
-class HanfordArmCoverageEnv(ManagerBasedRLEnv):
-    def __init__(self, cfg: HanfordArmIsaaclabEnvCfg, **kwargs):
-        
-        self.coverage_grid = CoverageGrid(
-            bounds=(TANK_LOCAL_MIN, TANK_LOCAL_MAX),
-            resolution=10,
-            num_envs=cfg.scene.num_envs,
-            device=self.device,
-        )
-        self.slam_bridge = None
-        super().__init__(cfg, **kwargs)

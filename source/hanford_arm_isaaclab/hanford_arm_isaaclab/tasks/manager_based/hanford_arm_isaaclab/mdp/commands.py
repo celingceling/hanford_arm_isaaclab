@@ -4,7 +4,7 @@ from isaaclab.envs.mdp.commands import UniformPoseCommand
 from isaaclab.envs.mdp.commands.commands_cfg import UniformPoseCommandCfg
 from isaaclab.utils.math import quat_from_euler_xyz, quat_unique, subtract_frame_transforms, compute_pose_error
 from isaaclab.utils import configclass
-from ..include.config import *
+from ..include.util import *
 
 
 # ── tuneable constants ────────────────────────────────────────────────────────
