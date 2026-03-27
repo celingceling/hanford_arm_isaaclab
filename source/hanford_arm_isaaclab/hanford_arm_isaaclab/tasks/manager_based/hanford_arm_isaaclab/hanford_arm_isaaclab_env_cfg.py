@@ -393,7 +393,7 @@ class TerminationsCfg:
     #     }
     # )
     
-    # # (3) No progress there is something wrong with this
+    # # (3) No progress there is something wrong with this, terminates too early. something wrong with window steps, does not reset upon reset
     # no_progress = DoneTerm(
     #     func=mdp.no_progress_termination,
     #     params={
