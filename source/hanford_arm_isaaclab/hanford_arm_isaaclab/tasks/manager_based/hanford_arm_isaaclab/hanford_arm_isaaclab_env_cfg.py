@@ -5,7 +5,7 @@
 
 """ 
 python scripts/skrl/train.py --task=Hanford-Arm-Isaaclab-v1 --num_envs=1 --headless
-python scripts/skrl/play.py --task=Hanford-Arm-Isaaclab-v1 --num_envs=16
+python scripts/skrl/play.py --task=Hanford-Arm-Isaaclab-v1 --num_envs=16 --checkpoint="C:/Users/LICF/projects/hanford_arm_isaaclab/logs/skrl/hanford_arm_mdp/2026-03-30_12-15-42_ppo_torch/checkpoints/best_agent.pt"
 
 git checkout WORKING-ptz-follow-collisionts
 
@@ -347,7 +347,7 @@ class RewardsCfg:
     # reward new grid cell discovery, also marks the cell
     coverage_gain = RewTerm(
         func=mdp.coverage_gain_placeholder,
-        weight = 0.4,
+        weight = 0.8,
     )
     
     # smoothness penalties
@@ -373,7 +373,7 @@ class RewardsCfg:
     # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
     stagnation = RewTerm(
         func=mdp.stagnation_penalty,
-        weight = -0.8,
+        weight = -0.7,
     )
 
 
@@ -433,7 +433,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2 # number of physics steps per control, control (policy + env.step()) runs at 60 hz
-        self.episode_length_s = 6.0
+        self.episode_length_s = 7.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
