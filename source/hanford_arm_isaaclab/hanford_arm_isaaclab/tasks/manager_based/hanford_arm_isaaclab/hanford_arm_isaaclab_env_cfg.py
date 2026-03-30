@@ -219,7 +219,7 @@ class CommandsCfg:
     ee_pose = mdp.WorldFrameUniformPoseCommandCfg(
         asset_name="robot",
         body_name="end_effector",
-        resampling_time_range=(0.75, 0.75),
+        resampling_time_range=(0.35, 0.35),
         debug_vis=False,
         ranges=mdp.WorldFrameUniformPoseCommandCfg.Ranges(
             pos_x=(-1.782, 2.393),   # world frame tank bounds with 0.3 margin

@@ -13,7 +13,7 @@ ARM_REACH_MAX       = 0.7  # [m] max reach from root - tune to your arm geometry
 
 # EE-centered step size limits (per resample)
 EE_STEP_MIN = 0.15   # [m] deadzone: avoid tiny moves (increase to reduce jitter)
-EE_STEP_MAX = 0.60   # [m] max jump per new target (decrease to reduce IK thrash)
+EE_STEP_MAX = 0.70   # [m] max jump per new target (decrease to reduce IK thrash)
 
 # Tank AABB in world frame (same values as CommandsCfg.ranges but used for
 # the collision / in-tank check).  Keep in sync with your ranges.
