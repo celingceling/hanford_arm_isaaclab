@@ -7,6 +7,8 @@
 python scripts/skrl/train.py --task=Hanford-Arm-Isaaclab-v1 --num_envs=1 --headless
 python scripts/skrl/play.py --task=Hanford-Arm-Isaaclab-v1 --num_envs=16
 
+git checkout WORKING-ptz-follow-collisionts
+
 NOTE: this is modeled after reach_env_cfg.py from isaaclab_tasks
 
 """
