@@ -24,9 +24,9 @@ EE_LIGHT_PRIM = "/World/envs/env_0/Robot/pulley_drive/SphereLight"
     
 # reset root positions
 POSES_W = [  # 3 poses, each [x,y,z,qw,qx,qy,qz] = 0
-    [-0.55521, 0.01049, 0.0, 1.0, 0.0, 0.0, 0.0],
-    [ 1.0123, 0.41759, 0.0, 1.0, 0.0, 0.0, 0.0],
-    [ 1.671, -0.97459, 0.0, 1.0, 0.0, 0.0, 0.0],
+    [-0.55521, 0.01049, 0.0, 1.0, 0.0, 0.0, 0.0], # in front of C
+    [ 1.0123, 0.41759, 0.0, 1.0, 0.0, 0.0, 0.0], # in front of M
+    [ 1.671, -0.98459, 0.0, 1.0, 0.0, 0.0, 0.0], # to the left of ABC
 ]
 
 # ptz offset for reset

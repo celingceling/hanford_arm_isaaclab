@@ -344,7 +344,7 @@ class RewardsCfg:
     # reward new grid cell discovery, also marks the cell
     coverage_gain = RewTerm(
         func=mdp.coverage_gain_placeholder,
-        weight = 8.0,
+        weight = 0.8,
     )
     
     # smoothness penalties
@@ -363,14 +363,14 @@ class RewardsCfg:
     # Collisions
     arm_collision = RewTerm(
         func=mdp.collision_reward, 
-        weight = 10.0, # positive bc collision_reward() already returns negative
+        weight = 1.0, # positive bc collision_reward() already returns negative
         params={"asset_name": "robot"}
     )
     
     # stagnation penalty (when no new cell is found)  # this kinda depends on coverage_gain firing first and that is kinda sketchy
     stagnation = RewTerm(
         func=mdp.stagnation_penalty,
-        weight = -6.0,
+        weight = -0.4,
     )
 
 
@@ -430,7 +430,7 @@ class HanfordArmIsaaclabEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2 # number of physics steps per control, control (policy + env.step()) runs at 60 hz
-        self.episode_length_s = 5.0
+        self.episode_length_s = 9.0
         # viewer settings
         self.viewer.eye = (3.20865, 4.14945, 9.11065)
         # simulation settings
